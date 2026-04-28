@@ -1,7 +1,7 @@
 # Jam'iyya AI
 
 Jam'iyya AI is a Next.js 14 prototype for digital savings circles with AI trust scoring, virtual wallets, and collective insurance.
-
+# firas
 ## Stack
 
 - Next.js 14 App Router
