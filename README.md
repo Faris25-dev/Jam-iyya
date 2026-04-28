@@ -10,14 +10,14 @@ Jam'iyya AI is a Next.js 14 prototype for digital savings circles with AI trust 
 - Tailwind CSS
 - next-intl for Arabic and English
 - Supabase for auth, database, and storage
-- Anthropic Claude for AI features
+- Google Gemini API for AI features
 - Framer Motion, Recharts, react-hook-form, zod, and Sonner
 
 ## Project Structure
 
 - `src/app/[locale]` contains localized routes for landing, auth, and dashboard flows.
 - `src/lib/supabase` contains browser, server, and middleware helpers.
-- `src/lib/ai` contains Claude wrappers and prompt templates.
+- `src/lib/ai` contains Gemini wrappers and prompt templates.
 - `src/lib/utils` contains trust scoring, jam3iyya rules, and formatting helpers.
 - `src/types` contains the TypeScript model layer.
 - `supabase/migrations` contains the initial schema.
@@ -25,7 +25,7 @@ Jam'iyya AI is a Next.js 14 prototype for digital savings circles with AI trust 
 ## Local Setup
 
 1. Copy `.env.local.example` to `.env.local`.
-2. Fill in the Supabase and Anthropic values.
+2. Fill in the Supabase and Gemini values.
 3. Install dependencies with `npm install`.
 4. Start the app with `npm run dev`.
 
