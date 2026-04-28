@@ -36,7 +36,7 @@ function DashboardScreen({ nav }) {
       <div style={{ padding: '20px 16px', maxWidth: 520, margin: '0 auto' }}>
 
         {/* Greeting + Score */}
-        <Card style={{ padding: 20, marginBottom: 16, position: 'relative', background: DS.colors.navy }}>
+        <Card style={{ padding: 20, marginBottom: 16, overflow: 'hidden', position: 'relative', background: DS.colors.navy }}>
           <GeoBg opacity={0.06} />
           <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>

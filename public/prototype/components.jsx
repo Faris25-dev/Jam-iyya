@@ -286,7 +286,7 @@ function TrustGauge({ score, size = 180, animated = true, showLabel = true }) {
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={t.color} strokeWidth={size*0.055} strokeDasharray={`${Math.max(0, dash-offset)} ${circ-Math.max(0, dash-offset)}`} strokeLinecap="round" style={{ transition: 'stroke-dasharray 0.08s linear' }} />
       </svg>
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: size * 0.22, fontWeight: 800, color: DS.colors.navy, lineHeight: 1 }}>{disp}</div>
+        <div style={{ fontSize: size * 0.22, fontWeight: 900, color: t.color, lineHeight: 1 }}>{disp}</div>
         {showLabel && <div style={{ fontSize: size * 0.085, color: t.color, fontWeight: 700, marginTop: 3 }}>{t.ar}</div>}
         <div style={{ fontSize: size * 0.065, color: DS.colors.muted, marginTop: 2 }}>/ 1000</div>
       </div>

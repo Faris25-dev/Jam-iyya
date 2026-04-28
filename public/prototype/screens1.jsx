@@ -97,17 +97,19 @@ function LandingScreen({ nav }) {
 
         {/* Floating app preview */}
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 40, position: 'relative', zIndex: 2 }}>
-          <div style={{ width: 200, background: 'rgba(255,255,255,0.06)', borderRadius: 24, border: '1px solid rgba(255,255,255,0.12)', padding: 16, backdropFilter: 'blur(12px)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>{isRtl ? 'درجة الثقة' : 'Trust Score'}</span>
+          <div style={{ width: 240, background: 'rgba(255,255,255,0.06)', borderRadius: 24, border: '1px solid rgba(255,255,255,0.12)', padding: 20, backdropFilter: 'blur(12px)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 500 }}>{isRtl ? 'درجة الثقة' : 'Trust Score'}</span>
               <TierBadge score={720} lang={lang} />
             </div>
-            <TrustGauge score={720} size={120} animated={true} showLabel={false} />
-            <div style={{ marginTop: 10, display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <TrustGauge score={720} size={140} animated={true} showLabel={false} />
+            </div>
+            <div style={{ marginTop: 14, display: 'flex', gap: 8, direction: 'ltr' }}>
               {[200, 500, 300].map((a, i) => (
-                <div key={i} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
-                  <div style={{ color: DS.colors.gold, fontSize: 12, fontWeight: 700 }}>{a}</div>
-                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9 }}>{t.jod}</div>
+                <div key={i} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: '8px 4px', textAlign: 'center' }}>
+                  <div style={{ color: DS.colors.gold, fontSize: 14, fontWeight: 800 }}>{a}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, marginTop: 2 }}>{t.jod}</div>
                 </div>
               ))}
             </div>
