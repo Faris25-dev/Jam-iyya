@@ -1,0 +1,23 @@
+### AI Chat API Tests
+# Make sure your Next.js local server is running (e.g., on port 3000)
+
+@baseUrl = http://localhost:3000/api
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZAZ21haWwuY29tIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzczNzYwMTIxLCJleHAiOjE3NzM4NDY1MjF9.5SICl1sw0LPzQUTRkyLS9c9Y0eqrUp54fkLqmI6wXLc
+
+### 1. Send a Message to the AI Chat Assistant
+# Requires a valid Supabase JWT for an authenticated user.
+# Provide a valid `jam3iyyaId` to test the dynamic circle context injection.
+
+POST {{baseUrl}}/ai/chat
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "jam3iyyaId": "1e61e679-8859-4329-a8cc-7c4a9520446f",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello! When is my turn to receive the payout, and how much will I get?"
+    }
+  ]
+}

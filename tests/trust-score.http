@@ -1,0 +1,30 @@
+### Trust Score API Tests
+# Make sure your Next.js local server is running (e.g., on port 3000)
+
+@baseUrl = http://localhost:3000/api
+
+### 1. Calculate Initial Trust Score
+# This is an unauthenticated endpoint for testing calculation logic.
+# Returns { score, tier } based on the provided factors.
+
+POST {{baseUrl}}/trust-score/calculate
+Content-Type: application/json
+
+{
+  "hasUploadedId": true,
+  "hasUploadedSelfie": true,
+  "phoneAgeMonths": 24,
+  "hasLinkedBank": false,
+  "hasIncomeDoc": true
+}
+
+###
+
+### 2. Fetch Trust Score History
+# Requires a valid Supabase JWT for an authenticated user.
+# Replace the token below with a valid session token obtained from the client or Supabase dashboard.
+
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZAZ21haWwuY29tIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzczNzYwMTIxLCJleHAiOjE3NzM4NDY1MjF9.5SICl1sw0LPzQUTRkyLS9c9Y0eqrUp54fkLqmI6wXLc
+
+GET {{baseUrl}}/trust-score/history
+Authorization: Bearer {{authToken}}
