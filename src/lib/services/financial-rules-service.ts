@@ -26,7 +26,7 @@ export async function getLockedFunds(userId: string): Promise<number> {
   let totalLocked = 0;
 
   for (const member of memberships) {
-    const circle = member.jam3iyyas;
+    const circle = member.jam3iyyas as any;
     // We only lock funds for circles that are active
     if (circle && !Array.isArray(circle) && circle.status === 'active') {
       const totalExpected = circle.duration_months * circle.monthly_amount;
