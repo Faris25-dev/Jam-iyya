@@ -46,9 +46,8 @@ Keep your answers concise and directly related to the user's circle details if a
     parts: [{ text: msg.content || msg.text || '' }]
   }));
 
-  // Create a model instance with the system instructions
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.5-flash',
     systemInstruction: systemPrompt 
   });
 
