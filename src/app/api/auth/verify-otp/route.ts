@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/client'
+import { calculateInitialScore, getTier, InitialTrustFactors } from '@/lib/ai/trust-engine'
 
 export async function POST(request: Request) {
   try {
@@ -37,12 +38,25 @@ export async function POST(request: Request) {
         .single()
 
       if (!existingProfile) {
+        // Calculate initial score using AI Trust Engine
+        const factors: InitialTrustFactors = {
+          hasUploadedId: false,
+          hasUploadedSelfie: false,
+          phoneAgeMonths: 6, // Give them 6 months baseline for verifying phone
+          hasLinkedBank: false,
+          hasIncomeDoc: false,
+        }
+        
+        const initialScore = calculateInitialScore(factors);
+        const initialTier = getTier(initialScore);
+
         const { error: profileError } = await supabase
           .from('profiles')
           .insert({
             id: user.id,
             phone,
-            trust_score: 100,
+            trust_score: initialScore,
+            tier: initialTier,
             wallet_balance: 5000,
             created_at: new Date().toISOString(),
           })
@@ -53,6 +67,15 @@ export async function POST(request: Request) {
             { status: 400 }
           )
         }
+
+        // Write the initial history record
+        await supabase.from('trust_score_history').insert({
+          user_id: user.id,
+          score_change: initialScore,
+          reason: 'Account creation and initial factors verification',
+          new_total_score: initialScore,
+          metadata: { factors, category: 'identity' }
+        })
       }
     }
 
