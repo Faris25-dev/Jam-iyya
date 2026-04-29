@@ -193,7 +193,7 @@ export default function LandingPage({ params: { locale } }: Props) {
                 {locale === 'ar' ? 'EN' : 'ع'}
               </button>
             </Link>
-            <Link href={`/${locale}`}>
+            <Link href={`/${locale}/login`}>
               <AppButton variant="secondary" size="sm" style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.08)' }}>
                 {t.signIn}
               </AppButton>
@@ -277,7 +277,7 @@ export default function LandingPage({ params: { locale } }: Props) {
               flexWrap: 'wrap',
             }}
           >
-            <Link href={`/${locale}`}>
+            <Link href={`/${locale}/signup`}>
               <AppButton variant="gold" size="lg">
                 {t.signUp}
                 <svg
@@ -296,7 +296,7 @@ export default function LandingPage({ params: { locale } }: Props) {
                 </svg>
               </AppButton>
             </Link>
-            <Link href={`/${locale}`}>
+            <Link href={`/${locale}/dashboard`}>
               <AppButton
                 variant="secondary"
                 size="lg"
@@ -674,7 +674,7 @@ export default function LandingPage({ params: { locale } }: Props) {
             ? 'انضم إلى آلاف الأسر العربية التي تدّخر بأمان'
             : 'Join thousands of Arab families saving safely'}
         </p>
-        <Link href={`/${locale}`}>
+        <Link href={`/${locale}/signup`}>
           <AppButton variant="gold" size="lg" style={{ marginBottom: 12 }}>
             {t.signUp} — {isRtl ? 'مجاناً' : 'Free'}
           </AppButton>

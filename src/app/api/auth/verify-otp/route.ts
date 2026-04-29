@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase/client'
+import { createServerClient } from '@/lib/supabase/server'
 import { calculateInitialScore, getTier, InitialTrustFactors } from '@/lib/ai/trust-engine'
 
 export async function POST(request: Request) {

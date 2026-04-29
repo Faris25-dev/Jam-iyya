@@ -56,7 +56,6 @@ type CreateStrings = {
   stepInvite: string;
   jod: string;
   continue: string;
-  createCircle: string;
   goToDashboard: string;
   circleCreated: string;
   circleIsReady: string;
@@ -149,7 +148,6 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
     stepInvite: t('stepInvite'),
     jod: t('jod'),
     continue: t('continue'),
-    createCircle: t('createCircle'),
     goToDashboard: t('goToDashboard'),
     circleCreated: t('circleCreated'),
     circleIsReady: t('circleIsReady'),
