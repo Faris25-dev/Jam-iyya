@@ -50,16 +50,21 @@ export async function POST(request: Request) {
         const initialScore = calculateInitialScore(factors);
         const initialTier = getTier(initialScore);
 
-        const { error: profileError } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .insert({
             id: user.id,
+            full_name: user.user_metadata?.full_name || 'User',
             phone,
             trust_score: initialScore,
             tier: initialTier,
             wallet_balance: 5000,
+            verification_status: 'verified',
             created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
+          .select()
+          .single()
 
         if (profileError) {
           return NextResponse.json(
@@ -72,16 +77,49 @@ export async function POST(request: Request) {
         await supabase.from('trust_score_history').insert({
           user_id: user.id,
           score_change: initialScore,
-          reason: 'Account creation and initial factors verification',
+          reason: 'Account creation and phone verification',
           new_total_score: initialScore,
           metadata: { factors, category: 'identity' }
         })
+
+        return NextResponse.json(
+          {
+            success: true,
+            user: {
+              id: user.id,
+              email: user.email,
+              phone,
+              profile,
+            },
+          },
+          { status: 200 }
+        )
       }
+
+      // Profile already exists, just return user info
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      return NextResponse.json(
+        {
+          success: true,
+          user: {
+            id: user.id,
+            email: user.email,
+            phone,
+            profile,
+          },
+        },
+        { status: 200 }
+      )
     }
 
     return NextResponse.json(
-      { success: true, user },
-      { status: 200 }
+      { success: false, error: 'Verification failed' },
+      { status: 400 }
     )
   } catch (error) {
     return NextResponse.json(
@@ -90,3 +128,4 @@ export async function POST(request: Request) {
     )
   }
 }
+

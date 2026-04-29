@@ -1,3 +1,5 @@
-export default function VerifyPage() {
-  return <main className="p-8 text-lg font-semibold">Verify account</main>;
+import { redirect } from 'next/navigation';
+
+export default function VerifyPage({ params }: Readonly<{ params: { locale: string } }>) {
+  redirect(`/${params.locale}/login`);
 }

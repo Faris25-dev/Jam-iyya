@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
@@ -9,6 +10,26 @@ import { Card, GeoBg, ProgressBar, TrustGauge } from '@/components/prototype/ui-
 
 type Locale = 'ar' | 'en';
 type Tier = 'bronze' | 'silver' | 'gold' | 'platinum';
+
+type WalletApiResponse = {
+  full_name: string;
+  balance: number;
+  trust_score: number;
+};
+
+type Jam3iyyaApiRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  type: 'private' | 'semi_public' | 'public';
+  monthly_amount: number;
+  total_members: number;
+  duration_months: number;
+  status: 'recruiting' | 'active' | 'completed' | 'cancelled';
+  min_trust_score: number;
+  insurance_pool: number;
+  current_members_count?: number;
+};
 
 const TIER_STYLES: Record<Tier, { color: string; bg: string }> = {
   bronze: { color: '#B87333', bg: '#FAEEE3' },
@@ -177,6 +198,35 @@ function CircleCard({
   );
 }
 
+function mapCircle(row: Jam3iyyaApiRow): Jam {
+  const theme = row.type === 'public' ? 'business' : row.type === 'semi_public' ? 'home' : 'wedding';
+  const currentMembers = row.current_members_count ?? 0;
+
+  return {
+    id: Number.parseInt(row.id.replace(/-/g, '').slice(0, 8), 16) || 0,
+    nameAr: row.name,
+    nameEn: row.name,
+    amount: row.monthly_amount,
+    totalMembers: row.total_members,
+    duration: row.duration_months,
+    minScore: row.min_trust_score,
+    type: row.type,
+    theme,
+    currentMonth: Math.min(currentMembers, row.duration_months),
+    yourTurn: 1,
+    status: row.status,
+    avgScore: row.min_trust_score,
+    organizerAr: row.name,
+    organizerEn: row.name,
+    descriptionAr: row.description || '',
+    descriptionEn: row.description || '',
+    insuranceFund: row.insurance_pool,
+    totalPot: row.monthly_amount * row.total_members,
+    members: [],
+    slots: Math.max(0, row.total_members - currentMembers),
+  };
+}
+
 function DashboardTopBar({
   locale,
   labels,
@@ -226,11 +276,52 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
   const t = useTranslations('dashboard');
   const router = useRouter();
   const isRtl = locale === 'ar';
+  const isDev = process.env.NODE_ENV !== 'production';
+  const [profile, setProfile] = useState<WalletApiResponse | null>(null);
+  const [activeCircles, setActiveCircles] = useState<Jam[]>(MOCK_JAMS.slice(0, 2));
+  const [loading, setLoading] = useState(true);
 
-  // TODO: trustScore from useUser()
-  // TODO: walletBalance from useUser()
-  // TODO: active circles and profile stats from useUser()
-  const user = MOCK_USER;
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        const [walletResponse, circlesResponse] = await Promise.all([
+          fetch('/api/wallet'),
+          fetch('/api/jam3iyyas?status=active&type=public&limit=2'),
+        ]);
+
+        if (walletResponse.status === 401 || circlesResponse.status === 401) {
+          if (!isDev) {
+          router.push(`/${locale}/login`);
+          }
+          return;
+        }
+
+        if (walletResponse.ok) {
+          const walletData = (await walletResponse.json()) as WalletApiResponse;
+          setProfile(walletData);
+        }
+
+        if (circlesResponse.ok) {
+          const circlesData = (await circlesResponse.json()) as { jam3iyyas: Jam3iyyaApiRow[] };
+          setActiveCircles((circlesData.jam3iyyas ?? []).map(mapCircle));
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadDashboard();
+  }, [isDev, locale, router]);
+
+  const user = profile
+    ? {
+        nameAr: profile.full_name,
+        nameEn: profile.full_name,
+        trustScore: profile.trust_score,
+        walletBalance: profile.balance,
+      }
+    : MOCK_USER;
+
   const trustScore = user.trustScore;
   const walletBalance = user.walletBalance;
 
@@ -276,18 +367,19 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
   const greetHour = new Date().getHours();
   const greeting = greetHour < 12 ? labels.goodMorning : greetHour < 17 ? labels.goodAfternoon : labels.goodEvening;
   const tier = DS.getTier(trustScore);
-  const activeCircles = MOCK_JAMS.slice(0, 2);
+  const activeCircleCount = activeCircles.length;
+  const monthsToNextTurn = activeCircles[0] ? Math.max(0, activeCircles[0].duration - activeCircles[0].currentMonth) : 0;
 
   const insights = isRtl
     ? [
-        { icon: '↑', value: '٢٤٠٠ د.أ', label: labels.totalSaved, color: DS.colors.success },
-        { icon: '◎', value: '٢', label: labels.activeCircles, color: DS.colors.navy },
-        { icon: '★', value: '٤', label: labels.monthsToNextTurn, color: DS.colors.gold },
+        { icon: '↑', value: `${walletBalance.toLocaleString()} د.أ`, label: labels.totalSaved, color: DS.colors.success },
+        { icon: '◎', value: `${activeCircleCount}`, label: labels.activeCircles, color: DS.colors.navy },
+        { icon: '★', value: `${monthsToNextTurn}`, label: labels.monthsToNextTurn, color: DS.colors.gold },
       ]
     : [
-        { icon: '↑', value: '2,400 JOD', label: labels.totalSaved, color: DS.colors.success },
-        { icon: '◎', value: '2', label: labels.activeCircles, color: DS.colors.navy },
-        { icon: '★', value: '4', label: labels.monthsToNextTurn, color: DS.colors.gold },
+        { icon: '↑', value: `${walletBalance.toLocaleString()} JOD`, label: labels.totalSaved, color: DS.colors.success },
+        { icon: '◎', value: `${activeCircleCount}`, label: labels.activeCircles, color: DS.colors.navy },
+        { icon: '★', value: `${monthsToNextTurn}`, label: labels.monthsToNextTurn, color: DS.colors.gold },
       ];
 
   const upcomingPayments = [
@@ -300,6 +392,7 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
       <DashboardTopBar locale={locale} labels={labels} onSwitchLocale={() => router.push(`/${isRtl ? 'en' : 'ar'}/dashboard`)} />
 
       <div style={{ padding: '20px 16px', maxWidth: 520, margin: '0 auto' }}>
+        {loading ? <div style={{ fontSize: 12, color: DS.colors.muted, marginBottom: 12 }}>{isRtl ? 'جاري تحميل البيانات...' : 'Loading live data...'}</div> : null}
         <Card style={{ padding: 20, marginBottom: 16, overflow: 'hidden', position: 'relative', background: DS.colors.navy }}>
           <GeoBg opacity={0.06} />
           <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

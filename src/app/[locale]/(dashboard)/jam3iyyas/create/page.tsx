@@ -100,6 +100,9 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
   const [step, setStep] = useState<CreateStep>(0);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [done, setDone] = useState(false);
+  const [createdCircleId, setCreatedCircleId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // TODO: create circle payload should be wired to Person 2's create circle API.
   const labels: CreateStrings = {
@@ -182,12 +185,56 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
     setForm((current) => ({ ...current, [key]: value }));
   };
 
+  const submitCircle = async () => {
+    if (loading) return;
+
+    if (!form.nameAr.trim() && !form.nameEn.trim()) {
+      setErrorMessage('Circle name is required');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch('/api/jam3iyyas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: (form.nameAr || form.nameEn || labels.newCircle).trim(),
+          description: form.nameEn || form.nameAr || null,
+          type: form.type,
+          monthly_amount: form.amount,
+          total_members: form.members,
+          duration_months: form.members,
+          start_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          min_trust_score: form.minScore,
+          turn_allocation_method: form.allocation === 'order' ? 'first_come' : form.allocation,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.error?.details?.message || payload?.error || 'Failed to create circle');
+      }
+
+      setCreatedCircleId(payload.id || payload?.data?.id || null);
+      setDone(true);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to create circle');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (done) {
     return (
       <div style={{ minHeight: '100vh', background: DS.colors.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }} data-screen-label="Create Done">
         <div style={{ width: 80, height: 80, borderRadius: 24, background: DS.colors.goldBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, color: DS.colors.gold, marginBottom: 24 }}>◈</div>
         <h2 style={{ fontSize: 24, fontWeight: 800, color: DS.colors.navy, marginBottom: 8 }}>{labels.circleCreated}</h2>
         <p style={{ color: DS.colors.muted, fontSize: 15, lineHeight: 1.6, maxWidth: 320, marginBottom: 32 }}>{labels.circleIsReady}</p>
+        {createdCircleId ? <div style={{ fontSize: 12, color: DS.colors.muted, marginBottom: 16 }}>ID: {createdCircleId}</div> : null}
         <div style={{ background: DS.colors.card, borderRadius: DS.radii.lg, padding: 20, width: '100%', maxWidth: 360, marginBottom: 24 }}>
           {[
             { label: labels.circleName, val: form.nameAr || labels.newCircle },
@@ -246,6 +293,7 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
         {step === 1 && (
           <div>
             <h3 style={{ fontWeight: 800, fontSize: 18, color: DS.colors.navy, marginBottom: 20 }}>{labels.circleDetails}</h3>
+            {errorMessage ? <div style={{ background: DS.colors.errorLight, color: DS.colors.error, borderRadius: DS.radii.md, padding: '10px 12px', fontSize: 12, marginBottom: 16 }}>{errorMessage}</div> : null}
             <div style={{ marginBottom: 18 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: DS.colors.muted, marginBottom: 6 }}>{labels.name}</label>
               <input value={form.nameAr} onChange={(event) => updateForm('nameAr', event.target.value)} placeholder={isRtl ? 'مثال: صندوق العرس' : 'e.g. Wedding Fund'} style={{ width: '100%', border: `1.5px solid ${DS.colors.border}`, borderRadius: DS.radii.md, padding: '12px 14px', fontSize: 15, fontFamily: 'inherit', color: DS.colors.navy, background: DS.colors.card, outline: 'none', boxSizing: 'border-box' }} />
@@ -331,8 +379,8 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
       </div>
 
       <div style={{ padding: '16px 20px 32px', background: DS.colors.card, borderTop: `1px solid ${DS.colors.border}` }}>
-        <AppButton variant={step === 3 ? 'gold' : 'primary'} size="lg" style={{ width: '100%', justifyContent: 'center' }} onClick={() => (step < 3 ? setStep((current) => (current + 1) as CreateStep) : setDone(true))}>
-          {step < 3 ? labels.continue : labels.createCircleButton}
+        <AppButton variant={step === 3 ? 'gold' : 'primary'} size="lg" style={{ width: '100%', justifyContent: 'center' }} onClick={() => (step < 3 ? setStep((current) => (current + 1) as CreateStep) : void submitCircle())}>
+          {step < 3 ? labels.continue : loading ? '...' : labels.createCircleButton}
         </AppButton>
       </div>
     </div>

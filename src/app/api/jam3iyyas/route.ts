@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createServerClient } from '@/lib/supabase/server';
 import { listJam3iyyas, createJam3iyya } from '@/lib/services/jam3iyya-service';
 import { z } from 'zod';
 
@@ -48,7 +48,7 @@ const postBodySchema = z
 // GET: List Jam3iyyas
 // ---------------------------------------------------------------------------
 export async function GET(request: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createServerClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
 // POST: Create a Jam3iyya
 // ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createServerClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
