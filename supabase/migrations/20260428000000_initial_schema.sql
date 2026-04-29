@@ -132,38 +132,56 @@ for update
 using (auth.uid() = id)
 with check (auth.uid() = id);
 
+drop policy if exists "profiles_insert_own" on public.profiles;
+create policy "profiles_insert_own"
+on public.profiles
+for insert
+with check (auth.uid() = id);
+
+-- Break infinite recursion by using a security definer function for membership checks
+create or replace function public.is_jam3iyya_member(check_jam3iyya_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from jam3iyya_members
+    where jam3iyya_id = check_jam3iyya_id and user_id = auth.uid()
+  );
+$$;
+
+drop policy if exists "jam3iyyas_select_public_or_member" on public.jam3iyyas;
 create policy "jam3iyyas_select_public_or_member"
 on public.jam3iyyas
 for select
 using (
   type = 'public'
   or creator_id = auth.uid()
-  or exists (
-    select 1 from public.jam3iyya_members m
-    where m.jam3iyya_id = id and m.user_id = auth.uid()
-  )
+  or public.is_jam3iyya_member(id)
 );
 
+drop policy if exists "jam3iyyas_insert_creator" on public.jam3iyyas;
 create policy "jam3iyyas_insert_creator"
 on public.jam3iyyas
 for insert
 with check (creator_id = auth.uid());
 
+drop policy if exists "jam3iyyas_update_creator" on public.jam3iyyas;
 create policy "jam3iyyas_update_creator"
 on public.jam3iyyas
 for update
 using (creator_id = auth.uid())
 with check (creator_id = auth.uid());
 
-create policy "jam3iyya_members_select_self_or_creator"
+drop policy if exists "jam3iyya_members_select_self_or_creator" on public.jam3iyya_members;
+drop policy if exists "jam3iyya_members_select" on public.jam3iyya_members;
+create policy "jam3iyya_members_select"
 on public.jam3iyya_members
 for select
 using (
   user_id = auth.uid()
-  or exists (
-    select 1 from public.jam3iyyas j
-    where j.id = jam3iyya_id and j.creator_id = auth.uid()
-  )
+  or public.is_jam3iyya_member(jam3iyya_id)
 );
 
 create policy "jam3iyya_members_insert_self"
