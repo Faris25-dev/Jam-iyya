@@ -110,14 +110,14 @@ export default function Jam3iyyaDetailPage() {
           throw new Error(`Failed to fetch circle: ${response.statusText}`);
         }
 
-        const data: CircleApiResponse = await response.json();
+        const data: CircleApiResponse & { jam3iyya: { current_user_member_data?: { user_id: string } } } = await response.json();
         const apiCircle = data.jam3iyya;
-
-        const supabase = createSupabaseBrowserClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        const userId = session?.user?.id;
+        const currentUserId = apiCircle.current_user_member_data?.user_id;
 
         // Transform API response to Jam interface
+        if (!apiCircle.members) {
+           throw new Error("No members returned");
+        }
         const transformedMembers: JamMember[] = apiCircle.members.map((member: any, index: number) => {
           const fullName = member.profiles?.full_name || 'Unknown';
           return {
@@ -127,7 +127,7 @@ export default function Jam3iyyaDetailPage() {
             paid: member.total_paid > 0,
             received: member.has_received,
             initials: member.profiles?.full_name ? createInitials(member.profiles.full_name) : '?',
-            isYou: member.user_id === userId,
+            isYou: !!currentUserId && member.user_id === currentUserId,
             isLate: member.status === 'defaulted' || member.status === 'late',
           };
         });
@@ -173,16 +173,7 @@ export default function Jam3iyyaDetailPage() {
   useEffect(() => {
     async function fetchChatHistory() {
       try {
-        const supabase = createSupabaseBrowserClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) return;
-
-        const response = await fetch(`/api/ai/chat?jam3iyyaId=${circleId}`, {
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`
-          }
-        });
+        const response = await fetch(`/api/ai/chat?jam3iyyaId=${circleId}`);
         
         if (response.ok) {
           const payload = await response.json();
@@ -312,27 +303,6 @@ export default function Jam3iyyaDetailPage() {
     setTyping(true);
 
     try {
-      const supabase = createSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        setMessages((current) => [
-          ...current,
-          {
-            id: current.length + 1,
-            senderAr: '✦ مساعد ذكي',
-            senderEn: '✦ AI Assistant',
-            textAr: 'خطأ: لم تتمكن من الاتصال. يرجى تسجيل الدخول مرة أخرى.',
-            textEn: 'Error: Unable to connect. Please log in again.',
-            time: new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
-            isAI: true,
-            isYou: false,
-          },
-        ]);
-        setTyping(false);
-        return;
-      }
-
       const apiMessages = messages.map(m => ({
         role: m.isAI ? 'assistant' : 'user',
         content: isRtl ? m.textAr : m.textEn
@@ -343,7 +313,6 @@ export default function Jam3iyyaDetailPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           jam3iyyaId: circleId,

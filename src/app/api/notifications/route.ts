@@ -73,7 +73,7 @@ export async function GET(req: Request) {
     // ========== FULL NOTIFICATION FETCH ==========
     let query = supabase
       .from('notifications')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -82,7 +82,7 @@ export async function GET(req: Request) {
       query = query.eq('related_jam3iyya_id', jam3iyyaId);
     }
 
-    const { data: notifications, error: fetchError, count: totalCount } = await query.select('*', { count: 'exact' });
+    const { data: notifications, error: fetchError, count: totalCount } = await query;
 
     if (fetchError) {
       console.error('Error fetching notifications:', fetchError);

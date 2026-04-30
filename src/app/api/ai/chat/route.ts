@@ -206,12 +206,12 @@ export async function POST(req: Request) {
 
             if (members && Array.isArray(members)) {
               circleContext.members = members
-                .filter(m => m.user_id && m.profiles?.full_name)
+                .filter(m => m.user_id && (Array.isArray(m.profiles) ? m.profiles[0]?.full_name : (m.profiles as any)?.full_name))
                 .map(m => ({
                   userId: m.user_id,
                   turnNumber: m.turn_number || 0,
                   status: m.status || 'active',
-                  name: m.profiles?.full_name || 'Unknown User'
+                  name: (Array.isArray(m.profiles) ? m.profiles[0]?.full_name : (m.profiles as any)?.full_name) || 'Unknown User'
                 }));
 
               // Attach current user's turn info
