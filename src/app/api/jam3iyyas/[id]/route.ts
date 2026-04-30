@@ -43,20 +43,29 @@ export async function GET(
   // 3. Current User Membership Logic
   const currentUserMemberData = circle.members.find(m => m.user_id === session.user.id) || null;
   const isCurrentUserMember = !!currentUserMemberData;
+  const isCurrentUserCreator = circle.creator_id === session.user.id;
 
   // 4. Privacy Check
-  if (circle.type === 'private' && !isCurrentUserMember && circle.creator_id !== session.user.id) {
-    // If it's private and you're not in it (nor the creator), we pretend it doesn't exist
+  if (circle.type === 'private' && !isCurrentUserMember && !isCurrentUserCreator) {
     return NextResponse.json({ error: 'Circle not found' }, { status: 404 });
   }
 
-  // 5. Shape Response
+  // 5. Fetch payments for all months (needed for payment status UI)
+  const { data: payments } = await supabase
+    .from('payments')
+    .select('user_id, month_number, status, amount, paid_date')
+    .eq('jam3iyya_id', params.id)
+    .order('month_number', { ascending: true });
+
+  // 6. Shape Response
   const responseData = {
     jam3iyya: {
       ...circle,
       current_members_count: circle.members.length,
       is_current_user_member: isCurrentUserMember,
-      current_user_member_data: currentUserMemberData
+      is_current_user_creator: isCurrentUserCreator,
+      current_user_member_data: currentUserMemberData,
+      payments: payments ?? [],
     }
   };
 
