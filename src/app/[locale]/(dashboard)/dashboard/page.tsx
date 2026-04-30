@@ -5,17 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { DS } from '@/components/prototype/design-system';
-import { MOCK_JAMS, MOCK_USER, type Jam } from '@/components/prototype/mock-data';
+import { type Jam } from '@/components/prototype/mock-data';
+import useUser from '@/hooks/useUser';
 import { Card, GeoBg, ProgressBar, TrustGauge } from '@/components/prototype/ui-library';
 
 type Locale = 'ar' | 'en';
 type Tier = 'bronze' | 'silver' | 'gold' | 'platinum';
-
-type WalletApiResponse = {
-  full_name: string;
-  balance: number;
-  trust_score: number;
-};
 
 type ProfileStatsResponse = {
   wallet: {
@@ -68,6 +63,7 @@ type Jam3iyyaApiRow = {
   min_trust_score: number;
   insurance_pool: number;
   current_members_count?: number;
+  current_month?: number;
 };
 
 const TIER_STYLES: Record<Tier, { color: string; bg: string }> = {
@@ -242,7 +238,7 @@ function mapCircle(row: Jam3iyyaApiRow): Jam {
   const currentMembers = row.current_members_count ?? 0;
 
   return {
-    id: Number.parseInt(row.id.replace(/-/g, '').slice(0, 8), 16) || 0,
+    id: row.id,
     nameAr: row.name,
     nameEn: row.name,
     amount: row.monthly_amount,
@@ -251,7 +247,7 @@ function mapCircle(row: Jam3iyyaApiRow): Jam {
     minScore: row.min_trust_score,
     type: row.type,
     theme,
-    currentMonth: Math.min(currentMembers, row.duration_months),
+    currentMonth: row.current_month ?? Math.min(currentMembers, row.duration_months),
     yourTurn: 1,
     status: row.status,
     avgScore: row.min_trust_score,
@@ -316,17 +312,19 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
   const router = useRouter();
   const isRtl = locale === 'ar';
   const isDev = process.env.NODE_ENV !== 'production';
-  const [profile, setProfile] = useState<WalletApiResponse | null>(null);
   const [stats, setStats] = useState<ProfileStatsResponse | null>(null);
-  const [activeCircles, setActiveCircles] = useState<Jam[]>(MOCK_JAMS.slice(0, 2));
+  const [activeCircles, setActiveCircles] = useState<Jam[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const { profile: userProfile, loading: userLoading } = useUser();
+  const showLoading = loading || userLoading;
 
   useEffect(() => {
     const loadDashboard = async () => {
       try {
         const [statsResponse, circlesResponse] = await Promise.all([
           fetch('/api/profile/stats'),
-          fetch('/api/jam3iyyas?status=active&type=public&limit=2'),
+          fetch('/api/jam3iyyas/my'),
         ]);
 
         if (statsResponse.status === 401 || circlesResponse.status === 401) {
@@ -339,11 +337,6 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
         if (statsResponse.ok) {
           const statsData = (await statsResponse.json()) as ProfileStatsResponse;
           setStats(statsData);
-          setProfile({
-            full_name: MOCK_USER.nameEn,
-            balance: statsData.wallet.balance,
-            trust_score: statsData.trust.score,
-          });
         }
 
         if (circlesResponse.ok) {
@@ -358,17 +351,9 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
     void loadDashboard();
   }, [isDev, locale, router]);
 
-  const user = profile
-    ? {
-        nameAr: profile.full_name,
-        nameEn: profile.full_name,
-        trustScore: profile.trust_score,
-        walletBalance: profile.balance,
-      }
-    : MOCK_USER;
-
-  const trustScore = stats?.trust.score ?? user.trustScore;
-  const walletBalance = stats?.wallet.balance ?? user.walletBalance;
+  const trustScore = userProfile?.trust_score ?? 0;
+  const walletBalance = userProfile?.wallet_balance ?? 0;
+  const fullName = userProfile?.full_name ?? '';
 
   const labels: DashboardStrings = {
     dashboardTitle: t('dashboardTitle'),
@@ -411,7 +396,7 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
 
   const greetHour = new Date().getHours();
   const greeting = greetHour < 12 ? labels.goodMorning : greetHour < 17 ? labels.goodAfternoon : labels.goodEvening;
-  const tier = DS.getTier(trustScore);
+  const tier = (userProfile?.tier as Tier) ?? DS.getTier(trustScore);
   const activeCircleCount = stats?.circles.active_count ?? activeCircles.length;
   const monthsToNextTurn = stats?.next_payout?.months_remaining ?? (activeCircles[0] ? Math.max(0, activeCircles[0].duration - activeCircles[0].currentMonth) : 0);
 
@@ -446,14 +431,14 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
       <DashboardTopBar locale={locale} labels={labels} onSwitchLocale={() => router.push(`/${isRtl ? 'en' : 'ar'}/dashboard`)} />
 
       <div style={{ padding: '20px 16px', maxWidth: 520, margin: '0 auto' }}>
-        {loading ? <div style={{ fontSize: 12, color: DS.colors.muted, marginBottom: 12 }}>{isRtl ? 'جاري تحميل البيانات...' : 'Loading live data...'}</div> : null}
+        {showLoading ? <div style={{ fontSize: 12, color: DS.colors.muted, marginBottom: 12 }}>{isRtl ? 'جاري تحميل البيانات...' : 'Loading live data...'}</div> : null}
         <Card style={{ padding: 20, marginBottom: 16, overflow: 'hidden', position: 'relative', background: DS.colors.navy }}>
           <GeoBg opacity={0.06} />
           <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginBottom: 4 }}>{greeting}</div>
               <div style={{ color: '#fff', fontWeight: 800, fontSize: 20, marginBottom: 12 }}>
-                {isRtl ? user.nameAr.split(' ')[0] : user.nameEn.split(' ')[0]} 👋
+                {fullName ? fullName.split(' ')[0] : ''} 👋
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{labels.trustScore}</span>

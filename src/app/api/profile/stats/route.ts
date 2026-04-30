@@ -79,7 +79,7 @@ export async function GET() {
       return NextResponse.json({ error: profileError?.message ?? 'Profile not found' }, { status: 404 });
     }
 
-    const memberships = (membershipsResult.data ?? []) as Array<{
+    const memberships = (membershipsResult.data ?? []) as unknown as Array<{
       status: string;
       has_received: boolean;
       turn_number: number | null;
@@ -94,8 +94,9 @@ export async function GET() {
       }>;
     }>;
 
-    const activeMemberships = memberships.filter((membership) => membership.status === 'active' && membership.jam3iyyas?.[0]?.status === 'active');
-    const completedMemberships = memberships.filter((membership) => membership.jam3iyyas?.[0]?.status === 'completed');
+    const participatingMemberships = memberships.filter((membership) => membership.status === 'active');
+    const activeMemberships = participatingMemberships.filter((membership) => membership.jam3iyyas?.[0]?.status === 'active');
+    const completedMemberships = memberships.filter((membership) => membership.status === 'completed');
     const defaultedMemberships = memberships.filter((membership) => membership.status === 'defaulted');
 
     const totalContributedLifetime = roundMoney(
@@ -178,7 +179,7 @@ export async function GET() {
         points_to_next_tier: pointsToNextTier,
       },
       circles: {
-        active_count: activeMemberships.length,
+        active_count: participatingMemberships.length,
         completed_count: completedMemberships.length,
         defaulted_count: defaultedMemberships.length,
         monthly_obligation: monthlyObligation,

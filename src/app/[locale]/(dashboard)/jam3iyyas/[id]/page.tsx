@@ -125,7 +125,7 @@ export default function Jam3iyyaDetailPage() {
         });
 
         const transformedJam: Jam = {
-          id: Math.random(), // Use a hash for backward compatibility
+          id: apiCircle.id,
           nameAr: apiCircle.name,
           nameEn: apiCircle.name,
           amount: apiCircle.monthly_amount,

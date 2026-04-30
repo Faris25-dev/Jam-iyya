@@ -260,7 +260,7 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
         
         // Transform API response to match Jam interface
         const transformed: BrowseJam[] = (data.jam3iyyas || []).map((jam: any) => ({
-          id: jam.id.split('-')[0].charCodeAt(0) % 1000, // Simple numeric ID from UUID
+          id: jam.id,
           uuid: jam.id,
           nameAr: jam.name,
           nameEn: jam.name,
@@ -368,7 +368,7 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
     return matchSearch && matchTier && matchAmt;
   });
 
-  const smartMatch = jams.find((jam) => jam.id === 3) || jams[0];
+  const smartMatch = jams[0] || null;
 
   const handleJoin = async (jam: BrowseJam) => {
     try {
