@@ -17,6 +17,45 @@ type WalletApiResponse = {
   trust_score: number;
 };
 
+type ProfileStatsResponse = {
+  wallet: {
+    balance: number;
+    currency: string;
+    monthly_delta: number;
+  };
+  trust: {
+    score: number;
+    tier: Tier;
+    next_tier_at: number | null;
+    points_to_next_tier: number;
+  };
+  circles: {
+    active_count: number;
+    completed_count: number;
+    defaulted_count: number;
+    monthly_obligation: number;
+  };
+  savings: {
+    total_contributed_lifetime: number;
+    total_received_lifetime: number;
+    net_lifetime: number;
+  };
+  next_payout: null | {
+    jam3iyya_id: string;
+    jam3iyya_name: string;
+    expected_pot: number;
+    expected_date: string;
+    months_remaining: number;
+  };
+  next_payment_due: null | {
+    jam3iyya_id: string;
+    jam3iyya_name: string;
+    amount: number;
+    due_date: string;
+    days_until_due: number;
+  };
+};
+
 type Jam3iyyaApiRow = {
   id: string;
   name: string;
@@ -278,27 +317,33 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
   const isRtl = locale === 'ar';
   const isDev = process.env.NODE_ENV !== 'production';
   const [profile, setProfile] = useState<WalletApiResponse | null>(null);
+  const [stats, setStats] = useState<ProfileStatsResponse | null>(null);
   const [activeCircles, setActiveCircles] = useState<Jam[]>(MOCK_JAMS.slice(0, 2));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadDashboard = async () => {
       try {
-        const [walletResponse, circlesResponse] = await Promise.all([
-          fetch('/api/wallet'),
+        const [statsResponse, circlesResponse] = await Promise.all([
+          fetch('/api/profile/stats'),
           fetch('/api/jam3iyyas?status=active&type=public&limit=2'),
         ]);
 
-        if (walletResponse.status === 401 || circlesResponse.status === 401) {
+        if (statsResponse.status === 401 || circlesResponse.status === 401) {
           if (!isDev) {
           router.push(`/${locale}/login`);
           }
           return;
         }
 
-        if (walletResponse.ok) {
-          const walletData = (await walletResponse.json()) as WalletApiResponse;
-          setProfile(walletData);
+        if (statsResponse.ok) {
+          const statsData = (await statsResponse.json()) as ProfileStatsResponse;
+          setStats(statsData);
+          setProfile({
+            full_name: MOCK_USER.nameEn,
+            balance: statsData.wallet.balance,
+            trust_score: statsData.trust.score,
+          });
         }
 
         if (circlesResponse.ok) {
@@ -322,8 +367,8 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
       }
     : MOCK_USER;
 
-  const trustScore = user.trustScore;
-  const walletBalance = user.walletBalance;
+  const trustScore = stats?.trust.score ?? user.trustScore;
+  const walletBalance = stats?.wallet.balance ?? user.walletBalance;
 
   const labels: DashboardStrings = {
     dashboardTitle: t('dashboardTitle'),
@@ -361,14 +406,14 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
     payout: t('payout'),
     englishShort: t('englishShort'),
     arabicShort: t('arabicShort'),
-    pointsToReachGold: t('pointsToReachGold', { points: Math.max(0, 600 - trustScore) }),
+    pointsToReachGold: t('pointsToReachGold', { points: Math.max(0, (stats?.trust.next_tier_at ?? 600) - trustScore) }),
   };
 
   const greetHour = new Date().getHours();
   const greeting = greetHour < 12 ? labels.goodMorning : greetHour < 17 ? labels.goodAfternoon : labels.goodEvening;
   const tier = DS.getTier(trustScore);
-  const activeCircleCount = activeCircles.length;
-  const monthsToNextTurn = activeCircles[0] ? Math.max(0, activeCircles[0].duration - activeCircles[0].currentMonth) : 0;
+  const activeCircleCount = stats?.circles.active_count ?? activeCircles.length;
+  const monthsToNextTurn = stats?.next_payout?.months_remaining ?? (activeCircles[0] ? Math.max(0, activeCircles[0].duration - activeCircles[0].currentMonth) : 0);
 
   const insights = isRtl
     ? [
@@ -382,10 +427,19 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
         { icon: '★', value: `${monthsToNextTurn}`, label: labels.monthsToNextTurn, color: DS.colors.gold },
       ];
 
-  const upcomingPayments = [
-    { name: labels.weddingFund, amount: 200, due: labels.dueMay1, color: DS.colors.gold },
-    { name: labels.businessCapital, amount: 500, due: labels.dueMay1, color: DS.colors.navyMid },
-  ];
+  const upcomingPayments = stats?.next_payment_due
+    ? [
+        {
+          name: stats.next_payment_due.jam3iyya_name,
+          amount: stats.next_payment_due.amount,
+          due: `${stats.next_payment_due.due_date} · ${stats.next_payment_due.days_until_due}d`,
+          color: DS.colors.gold,
+        },
+      ]
+    : [
+        { name: labels.weddingFund, amount: 200, due: labels.dueMay1, color: DS.colors.gold },
+        { name: labels.businessCapital, amount: 500, due: labels.dueMay1, color: DS.colors.navyMid },
+      ];
 
   return (
     <div style={{ minHeight: '100vh', background: DS.colors.bg, paddingBottom: 90 }} data-screen-label="Dashboard">
@@ -502,12 +556,16 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
 
         <Card
           hover
-          onClick={() => router.push(`/${locale}/wallet`)}
+          onClick={() => router.push(`/${locale}/payout`)}
           style={{ padding: 18, marginTop: 8, background: `linear-gradient(135deg, ${DS.colors.goldBg}, #fff)`, border: `1.5px solid ${DS.colors.gold}40`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <div>
             <div style={{ fontWeight: 800, fontSize: 15, color: DS.colors.navy, marginBottom: 4 }}>{labels.seePayoutDay}</div>
-            <div style={{ fontSize: 12, color: DS.colors.muted }}>{labels.previewPayoutExperience}</div>
+            <div style={{ fontSize: 12, color: DS.colors.muted }}>
+              {stats?.next_payout
+                ? `${stats.next_payout.jam3iyya_name} · ${stats.next_payout.expected_date}`
+                : labels.previewPayoutExperience}
+            </div>
           </div>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: DS.colors.gold, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5}>

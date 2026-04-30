@@ -6,7 +6,6 @@ import { useTranslations } from 'next-intl';
 
 import { AppButton, Card, GeoBg } from '@/components/prototype/ui-library';
 import { DS } from '@/components/prototype/design-system';
-import { MOCK_JAMS } from '@/components/prototype/mock-data';
 
 type Locale = 'ar' | 'en';
 
@@ -34,17 +33,79 @@ type PayoutStrings = {
   payoutAmount: string;
 };
 
+type ProfileStatsResponse = {
+  wallet: {
+    balance: number;
+    currency: string;
+    monthly_delta: number;
+  };
+  trust: {
+    score: number;
+    tier: 'bronze' | 'silver' | 'gold' | 'platinum';
+    next_tier_at: number | null;
+    points_to_next_tier: number;
+  };
+  circles: {
+    active_count: number;
+    completed_count: number;
+    defaulted_count: number;
+    monthly_obligation: number;
+  };
+  savings: {
+    total_contributed_lifetime: number;
+    total_received_lifetime: number;
+    net_lifetime: number;
+  };
+  next_payout: null | {
+    jam3iyya_id: string;
+    jam3iyya_name: string;
+    expected_pot: number;
+    expected_date: string;
+    months_remaining: number;
+  };
+  next_payment_due: null | {
+    jam3iyya_id: string;
+    jam3iyya_name: string;
+    amount: number;
+    due_date: string;
+    days_until_due: number;
+  };
+};
+
+type PaymentsResponse = {
+  payments: Array<{
+    id: string;
+    jam3iyya_id: string;
+    jam3iyya_name: string;
+    amount: number;
+    month_number: number;
+    status: 'pending' | 'paid' | 'late' | 'defaulted' | 'covered_by_insurance';
+    due_date: string;
+    paid_date: string | null;
+  }>;
+};
+
 export default function PayoutPage({ params }: Readonly<{ params: { locale: string } }>) {
   const locale = (params.locale === 'ar' ? 'ar' : 'en') as Locale;
   const t = useTranslations('payout');
   const router = useRouter();
   const isRtl = locale === 'ar';
-  const jam = MOCK_JAMS[1];
   const [showConfetti, setShowConfetti] = useState(false);
   const [showInsurance, setShowInsurance] = useState(false);
   const [moneyAnim, setMoneyAnim] = useState(false);
+  const [stats, setStats] = useState<ProfileStatsResponse | null>(null);
+  const [payments, setPayments] = useState<PaymentsResponse['payments']>([]);
+  const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // TODO: payout amount, insurance state, and turn metadata should come from Person 2's payout data.
+  const previewName = stats?.next_payout?.jam3iyya_name ?? (isRtl ? 'جمعيتك القادمة' : 'Your next circle');
+  const previewAmount = stats?.next_payout?.expected_pot ?? 5000;
+  const previewDate = stats?.next_payout?.expected_date ?? '—';
+  const previewMonthlyObligation = stats?.circles.monthly_obligation ?? 0;
+  const previewInsuranceFund = Math.max(0, (stats?.savings.total_received_lifetime ?? 0) - (stats?.savings.total_contributed_lifetime ?? 0));
+
+  // Live payout state now comes from the profile stats and payments APIs.
   const labels: PayoutStrings = {
     payoutDay: t('payoutDay'),
     payoutMessage: t('payoutMessage'),
@@ -70,6 +131,41 @@ export default function PayoutPage({ params }: Readonly<{ params: { locale: stri
   };
 
   useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setErrorMessage(null);
+
+        const [statsResponse, paymentsResponse] = await Promise.all([
+          fetch('/api/profile/stats'),
+          fetch('/api/payments?limit=6'),
+        ]);
+
+        if (statsResponse.status === 401 || paymentsResponse.status === 401) {
+          router.push(`/${locale}/login`);
+          return;
+        }
+
+        if (!statsResponse.ok) {
+          throw new Error('Failed to load payout stats');
+        }
+
+        const statsData = (await statsResponse.json()) as ProfileStatsResponse;
+        setStats(statsData);
+
+        if (paymentsResponse.ok) {
+          const paymentsData = (await paymentsResponse.json()) as PaymentsResponse;
+          setPayments(paymentsData.payments ?? []);
+        }
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : 'Failed to load payout view');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadData();
+
     const moneyTimer = window.setTimeout(() => setMoneyAnim(true), 300);
     const confettiTimer = window.setTimeout(() => setShowConfetti(true), 1200);
 
@@ -77,7 +173,54 @@ export default function PayoutPage({ params }: Readonly<{ params: { locale: stri
       window.clearTimeout(moneyTimer);
       window.clearTimeout(confettiTimer);
     };
-  }, []);
+  }, [locale, router]);
+
+  const handlePayNow = async () => {
+    if (!stats?.next_payment_due) return;
+
+    try {
+      setPaying(true);
+      setErrorMessage(null);
+
+      const response = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jam3iyyaId: stats.next_payment_due.jam3iyya_id,
+          monthNumber: 1,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error ?? 'Payment failed');
+      }
+
+      setPayments((current) =>
+        current.map((payment) =>
+          payment.jam3iyya_id === stats.next_payment_due?.jam3iyya_id && payment.status === 'pending'
+            ? { ...payment, status: 'paid', paid_date: new Date().toISOString() }
+            : payment,
+        ),
+      );
+
+      setStats((current) =>
+        current
+          ? {
+              ...current,
+              wallet: {
+                ...current.wallet,
+                balance: Number(payload.wallet_balance_after ?? current.wallet.balance),
+              },
+            }
+          : current,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Payment failed');
+    } finally {
+      setPaying(false);
+    }
+  };
 
   const confettiColors = [DS.colors.gold, '#fff', DS.colors.navy, '#e8f4ee', DS.colors.goldLight];
   const confettiPieces = Array.from({ length: 36 }, (_, index) => ({
@@ -141,14 +284,22 @@ export default function PayoutPage({ params }: Readonly<{ params: { locale: stri
           {labels.payoutMessage}
         </h1>
         <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 15, marginBottom: 40 }}>
-          {isRtl ? labels.businessCapitalTurn : labels.businessCapitalTurn}
+          {loading
+            ? (isRtl ? 'جاري تحميل موعد الدفعة...' : 'Loading your next payout...')
+            : stats?.next_payout
+              ? (isRtl
+                  ? `${previewName} · متوقع في ${previewDate}`
+                  : `${previewName} · expected on ${previewDate}`)
+              : labels.businessCapitalTurn}
         </p>
 
         <div style={{ position: 'relative', marginBottom: 48 }}>
           <div style={{ width: 200, height: 200, borderRadius: 999, background: 'rgba(196,150,62,0.15)', border: `2px solid ${DS.colors.gold}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.8s cubic-bezier(0.34,1.56,0.64,1)', transform: moneyAnim ? 'scale(1)' : 'scale(0.5)', opacity: moneyAnim ? 1 : 0 }}>
             <div style={{ width: 160, height: 160, borderRadius: 999, background: 'rgba(196,150,62,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 40, fontWeight: 900, color: DS.colors.gold, letterSpacing: '-0.02em', lineHeight: 1 }}>5,000</div>
+                <div style={{ fontSize: 40, fontWeight: 900, color: DS.colors.gold, letterSpacing: '-0.02em', lineHeight: 1 }}>
+                  {previewAmount.toLocaleString()}
+                </div>
                 <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16, fontWeight: 600, marginTop: 4 }}>{labels.jod}</div>
               </div>
             </div>
@@ -176,10 +327,10 @@ export default function PayoutPage({ params }: Readonly<{ params: { locale: stri
 
         <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: DS.radii.lg, padding: 20, width: '100%', maxWidth: 380, marginBottom: 24, border: '1px solid rgba(255,255,255,0.1)' }}>
           {[
-            { label: labels.memberContributions, val: `${jam.amount * jam.totalMembers} ${labels.jod}`, color: '#fff' },
-            { label: labels.members, val: jam.totalMembers, color: 'rgba(255,255,255,0.6)' },
-            { label: labels.circle, val: isRtl ? jam.nameAr : jam.nameEn, color: 'rgba(255,255,255,0.6)' },
-            { label: labels.youWillReceive, val: labels.payoutAmount, color: DS.colors.gold, bold: true },
+            { label: labels.memberContributions, val: `${previewAmount.toLocaleString()} ${labels.jod}`, color: '#fff' },
+            { label: labels.members, val: stats?.circles.active_count ?? 0, color: 'rgba(255,255,255,0.6)' },
+            { label: labels.circle, val: previewName, color: 'rgba(255,255,255,0.6)' },
+            { label: labels.youWillReceive, val: `${previewAmount.toLocaleString()} ${labels.jod}`, color: DS.colors.gold, bold: true },
           ].map((row, index) => (
             <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', paddingBlock: 8, borderBottom: index < 3 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
               <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>{row.label}</span>
@@ -210,9 +361,9 @@ export default function PayoutPage({ params }: Readonly<{ params: { locale: stri
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {[
-                  { label: labels.missingAmount, val: `500 ${labels.jod}`, color: DS.colors.error },
-                  { label: labels.fundCovered, val: `500 ${labels.jod}`, color: DS.colors.success },
-                  { label: labels.fundBalance, val: `${jam.insuranceFund} ${labels.jod}`, color: DS.colors.gold },
+                  { label: labels.missingAmount, val: `${previewMonthlyObligation ? Math.min(previewMonthlyObligation, previewAmount).toLocaleString() : 0} ${labels.jod}`, color: DS.colors.error },
+                  { label: labels.fundCovered, val: `${previewMonthlyObligation ? Math.min(previewMonthlyObligation, previewInsuranceFund).toLocaleString() : 0} ${labels.jod}`, color: DS.colors.success },
+                  { label: labels.fundBalance, val: `${previewInsuranceFund.toLocaleString()} ${labels.jod}`, color: DS.colors.gold },
                   { label: labels.yourLoss, val: labels.zero, color: DS.colors.success },
                 ].map((item) => (
                   <div key={item.label} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: DS.radii.sm, padding: '10px 12px' }}>
@@ -229,6 +380,55 @@ export default function PayoutPage({ params }: Readonly<{ params: { locale: stri
             </div>
           )}
         </div>
+
+        <Card style={{ width: '100%', maxWidth: 380, padding: 16, marginBottom: 18, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ color: '#fff', fontWeight: 800, fontSize: 14 }}>{isRtl ? 'الدفعة القادمة' : 'Next payment due'}</div>
+            <div style={{ color: DS.colors.gold, fontWeight: 800, fontSize: 14 }}>
+              {stats?.next_payment_due ? `${stats.next_payment_due.amount.toLocaleString()} ${labels.jod}` : `0 ${labels.jod}`}
+            </div>
+          </div>
+          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 14 }}>
+            {stats?.next_payment_due
+              ? `${stats.next_payment_due.jam3iyya_name} · ${stats.next_payment_due.due_date} · ${stats.next_payment_due.days_until_due}d`
+              : (isRtl ? 'لا توجد دفعة مستحقة حالياً' : 'No payment is due right now')}
+          </div>
+          <AppButton
+            variant="gold"
+            size="md"
+            style={{ width: '100%', justifyContent: 'center', opacity: stats?.next_payment_due ? 1 : 0.7 }}
+            onClick={handlePayNow}
+            disabled={!stats?.next_payment_due || paying}
+          >
+            {paying ? (isRtl ? 'جاري الدفع...' : 'Processing...') : (isRtl ? 'ادفع الآن' : 'Pay now')}
+          </AppButton>
+        </Card>
+
+        <Card style={{ width: '100%', maxWidth: 380, padding: 16, marginBottom: 24, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ color: '#fff', fontWeight: 800, fontSize: 14, marginBottom: 12 }}>{isRtl ? 'سجل المدفوعات' : 'Recent payments'}</div>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {payments.length > 0 ? payments.map((payment) => (
+              <div key={payment.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', borderRadius: DS.radii.sm, padding: '10px 12px' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ color: '#fff', fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{payment.jam3iyya_name}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>{payment.due_date}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: DS.colors.gold, fontWeight: 800, fontSize: 13 }}>{payment.amount.toLocaleString()} {labels.jod}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>{payment.status}</div>
+                </div>
+              </div>
+            )) : (
+              <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>{loading ? (isRtl ? 'جاري التحميل...' : 'Loading payment history...') : (isRtl ? 'لا توجد مدفوعات بعد' : 'No payments yet')}</div>
+            )}
+          </div>
+        </Card>
+
+        {errorMessage ? (
+          <div style={{ width: '100%', maxWidth: 380, marginBottom: 16, color: '#fff', background: 'rgba(220, 38, 38, 0.15)', border: '1px solid rgba(220, 38, 38, 0.35)', borderRadius: DS.radii.md, padding: '10px 12px', fontSize: 12 }}>
+            {errorMessage}
+          </div>
+        ) : null}
 
         <AppButton variant="gold" size="lg" style={{ width: '100%', maxWidth: 380, justifyContent: 'center' }} onClick={() => router.push(`/${locale}/dashboard`)}>
           {labels.backToDashboard}
