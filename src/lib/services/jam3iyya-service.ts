@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database';
+import { getTier } from '@/lib/ai/trust-engine';
 
 // ---------------------------------------------------------------------------
 // Row type aliases (directly from the Database schema)
@@ -470,7 +471,7 @@ export async function joinJam3iyya(
   }
 
   // 7. Tier check
-  const calculatedTier = getTierFromScore(profile.trust_score);
+  const calculatedTier = getTier(profile.trust_score);
   const maxAllowed = getMaxMonthlyAmountForTier(calculatedTier);
   if (circle.monthly_amount > maxAllowed) {
     return { 

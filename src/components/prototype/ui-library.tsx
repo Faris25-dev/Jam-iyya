@@ -25,7 +25,7 @@ export function GeoBg({ opacity = 0.035 }: { opacity?: number }) {
 interface AppButtonProps {
   children: ReactNode;
   variant?: 'primary' | 'gold' | 'secondary' | 'ghost' | 'danger';
-  onClick?: () => void;
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
   style?: CSSProperties;
   size?: 'sm' | 'md' | 'lg';

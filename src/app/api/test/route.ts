@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createServerClient } from '@/lib/supabase/server';
 import { createJam3iyya } from '@/lib/services/jam3iyya-service';
 
 export async function GET() {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createServerClient();
 
     // 1. Create a NEW temporary account (now that email confirmations are off!)
     const email = `testdev${Date.now()}@jamiyya.com`;

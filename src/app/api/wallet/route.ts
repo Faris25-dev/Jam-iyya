@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createServerClient } from '@/lib/supabase/server';
 import { getLockedFunds } from '@/lib/services/financial-rules-service';
 import { z } from 'zod';
 
@@ -9,7 +9,7 @@ const walletOperationSchema = z.object({
 }).strict();
 
 export async function GET(request: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createServerClient();
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session?.user) {
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   // 1. Get Wallet Balance
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('wallet_balance')
+    .select('full_name, wallet_balance, trust_score')
     .eq('id', session.user.id)
     .single();
 
@@ -62,14 +62,16 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
+    full_name: profile.full_name,
     balance: Number(profile.wallet_balance),
+    trust_score: Number(profile.trust_score ?? 0),
     stats,
     currency: "JOD"
   });
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createServerClient();
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session?.user) {

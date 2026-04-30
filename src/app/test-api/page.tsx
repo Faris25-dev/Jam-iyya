@@ -9,6 +9,9 @@ export default function TestApiPage() {
   const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [txCount, setTxCount] = useState<number>(0);
+  const [paymentJam3iyyaId, setPaymentJam3iyyaId] = useState<string>('');
+  const [paymentUserId, setPaymentUserId] = useState<string>('');
+  const [paymentMonthNumber, setPaymentMonthNumber] = useState<number>(1);
 
   const supabase = createSupabaseBrowserClient();
 
@@ -203,6 +206,40 @@ export default function TestApiPage() {
     }
   };
 
+  const runPaymentTest = async (action: 'cycle' | 'schedule' | 'manual' | 'default') => {
+    const jam3iyyaId = paymentJam3iyyaId || lastCreatedId;
+
+    if (!jam3iyyaId) {
+      setOutput('Set a jam3iyya ID first or create a circle above.');
+      return;
+    }
+
+    if ((action === 'manual' || action === 'default') && !paymentUserId) {
+      setOutput('Set a user ID for manual payment or default testing.');
+      return;
+    }
+
+    setOutput(`Testing payment action: ${action}...`);
+
+    try {
+      const res = await fetch('/api/test/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          jam3iyyaId,
+          userId: paymentUserId || undefined,
+          monthNumber: paymentMonthNumber,
+        }),
+      });
+
+      const data = await res.json();
+      setOutput(`${action.toUpperCase()} Status: ${res.status}\n\n${JSON.stringify(data, null, 2)}`);
+    } catch (e: any) {
+      setOutput(`${action.toUpperCase()} Error: ${e.message}`);
+    }
+  };
+
   const handleWalletReset = async () => {
     if (!session?.user) return;
     setOutput('Resetting Wallet Balance to 5000 directly...');
@@ -263,6 +300,52 @@ export default function TestApiPage() {
         <button onClick={handleTestLeave} disabled={!lastCreatedId} style={{ padding: '10px 20px', background: lastCreatedId ? '#ef4444' : '#ccc', color: 'white', border: 'none', borderRadius: '5px', cursor: lastCreatedId ? 'pointer' : 'not-allowed' }}>
           7. Leave Circle
         </button>
+      </div>
+
+      <h3 style={{ borderBottom: '1px solid #ccc', paddingBottom: '10px' }}>Payment Engine Tests</h3>
+      <div style={{ display: 'grid', gap: '12px', marginBottom: '16px', padding: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+        <div style={{ display: 'grid', gap: '8px' }}>
+          <label style={{ fontSize: '0.9rem', fontWeight: 600 }}>Jam3iyya ID</label>
+          <input
+            value={paymentJam3iyyaId}
+            onChange={(event) => setPaymentJam3iyyaId(event.target.value)}
+            placeholder={lastCreatedId ?? 'Paste the circle UUID here'}
+            style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
+          />
+        </div>
+        <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '1fr 1fr 1fr' }}>
+          <input
+            value={paymentUserId}
+            onChange={(event) => setPaymentUserId(event.target.value)}
+            placeholder="User ID for manual/default tests"
+            style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
+          />
+          <input
+            type="number"
+            min={1}
+            value={paymentMonthNumber}
+            onChange={(event) => setPaymentMonthNumber(Number(event.target.value))}
+            placeholder="Month number"
+            style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', color: '#64748b', fontSize: '0.85rem' }}>
+            Uses the test route at /api/test/payments
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button onClick={() => runPaymentTest('schedule')} style={{ padding: '10px 20px', background: '#0f766e', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+            Load Schedule
+          </button>
+          <button onClick={() => runPaymentTest('cycle')} style={{ padding: '10px 20px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+            Run Monthly Cycle
+          </button>
+          <button onClick={() => runPaymentTest('manual')} style={{ padding: '10px 20px', background: '#7c3aed', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+            Manual Late Payment
+          </button>
+          <button onClick={() => runPaymentTest('default')} style={{ padding: '10px 20px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+            Mark Default
+          </button>
+        </div>
       </div>
 
       <h3 style={{ borderBottom: '1px solid #ccc', paddingBottom: '10px' }}>Wallet Operations</h3>

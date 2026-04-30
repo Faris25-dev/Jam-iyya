@@ -27,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${ibmPlexSansArabic.variable} ${tajawal.variable} bg-background text-foreground antialiased`}>
+      <body className={`${ibmPlexSansArabic.variable} ${tajawal.variable} antialiased`}>
         {children}
       </body>
     </html>
