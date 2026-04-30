@@ -11,8 +11,8 @@ type Locale = 'ar' | 'en';
 
 type TrustHistoryRow = {
   id: string;
-  old_score: number;
-  new_score: number;
+  score_change: number;
+  new_total_score: number;
   reason: string;
   created_at: string;
 };
@@ -163,7 +163,7 @@ export default function TrustScorePage() {
             {history.map((item) => (
               <div key={item.id} style={{ border: `1px solid ${DS.colors.border}`, borderRadius: DS.radii.md, padding: 12, background: DS.colors.card }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
-                  <strong style={{ color: DS.colors.navy }}>{item.old_score ?? 0} → {item.new_score}</strong>
+              <strong style={{ color: DS.colors.navy }}>{(item.new_total_score - item.score_change) ?? 0} → {item.new_total_score}</strong>
                   <span style={{ color: DS.colors.muted, fontSize: 12 }}>{new Date(item.created_at).toLocaleString()}</span>
                 </div>
                 <div style={{ color: DS.colors.muted, fontSize: 13, lineHeight: 1.5 }}>{item.reason}</div>

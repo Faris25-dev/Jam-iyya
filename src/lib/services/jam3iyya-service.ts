@@ -458,44 +458,44 @@ export async function joinJam3iyya(
     return { data: null, error: { code: 'PROFILE_NOT_FOUND', message: { ar: 'الحساب غير موجود', en: 'Profile not found' } } };
   }
 
-  // 6. Trust score check
-  if (profile.trust_score < circle.min_trust_score) {
-    return { 
-      data: null, 
-      error: { 
-        code: 'INSUFFICIENT_TRUST_SCORE', 
-        message: { ar: 'درجة الثقة غير كافية', en: 'Insufficient trust score' },
-        details: { current: profile.trust_score, required: circle.min_trust_score }
-      } 
-    };
-  }
+  // 6. Trust score check — DISABLED for demo (open to all)
+  // if (profile.trust_score < circle.min_trust_score) {
+  //   return { 
+  //     data: null, 
+  //     error: { 
+  //       code: 'INSUFFICIENT_TRUST_SCORE', 
+  //       message: { ar: 'درجة الثقة غير كافية', en: 'Insufficient trust score' },
+  //       details: { current: profile.trust_score, required: circle.min_trust_score }
+  //     } 
+  //   };
+  // }
 
-  // 7. Tier check
-  const calculatedTier = getTier(profile.trust_score);
-  const maxAllowed = getMaxMonthlyAmountForTier(calculatedTier);
-  if (circle.monthly_amount > maxAllowed) {
-    return { 
-      data: null, 
-      error: { 
-        code: 'INSUFFICIENT_TIER', 
-        message: { ar: 'فئتك لا تسمح بهذا المبلغ الشهري', en: 'Your tier does not allow this monthly amount' },
-        details: { tier: calculatedTier, max_allowed: maxAllowed, required: circle.monthly_amount }
-      } 
-    };
-  }
+  // 7. Tier check — DISABLED for demo (open to all)
+  // const calculatedTier = getTier(profile.trust_score);
+  // const maxAllowed = getMaxMonthlyAmountForTier(calculatedTier);
+  // if (circle.monthly_amount > maxAllowed) {
+  //   return { 
+  //     data: null, 
+  //     error: { 
+  //       code: 'INSUFFICIENT_TIER', 
+  //       message: { ar: 'فئتك لا تسمح بهذا المبلغ الشهري', en: 'Your tier does not allow this monthly amount' },
+  //       details: { tier: calculatedTier, max_allowed: maxAllowed, required: circle.monthly_amount }
+  //     } 
+  //   };
+  // }
 
-  // 8. Wallet sufficiency check
-  const requiredBalance = circle.monthly_amount * 2;
-  if (profile.wallet_balance < requiredBalance) {
-    return { 
-      data: null, 
-      error: { 
-        code: 'INSUFFICIENT_FUNDS', 
-        message: { ar: 'رصيد المحفظة غير كافٍ. يجب أن يكون لديك ما يعادل شهرين.', en: 'Insufficient wallet balance. Must have 2 months coverage.' },
-        details: { current: profile.wallet_balance, required: requiredBalance }
-      } 
-    };
-  }
+  // 8. Wallet sufficiency check — DISABLED for demo
+  // const requiredBalance = circle.monthly_amount * 2;
+  // if (profile.wallet_balance < requiredBalance) {
+  //   return { 
+  //     data: null, 
+  //     error: { 
+  //       code: 'INSUFFICIENT_FUNDS', 
+  //       message: { ar: 'رصيد المحفظة غير كافٍ. يجب أن يكون لديك ما يعادل شهرين.', en: 'Insufficient wallet balance. Must have 2 months coverage.' },
+  //       details: { current: profile.wallet_balance, required: requiredBalance }
+  //     } 
+  //   };
+  // }
 
   // 9. Assign Turn
   let assignedTurn: number | null = null;

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { Card, JamiyyaWheel, TierBadge, AppButton, ProgressBar, TopBar } from '@/components/prototype/ui-library';
-import { CHAT_MESSAGES_DATA, MOCK_JAMS, type ChatMessage, type Jam, type JamMember } from '@/components/prototype/mock-data';
+import { type ChatMessage, type Jam, type JamMember } from '@/components/prototype/mock-data';
 import { DS } from '@/components/prototype/design-system';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -58,11 +58,15 @@ interface CircleApiResponse {
     total_members: number;
     duration_months: number;
     status: string;
+    type: string;
+    min_trust_score: number;
+    current_month: number;
     members: Array<{
       user_id: string;
       turn_number: number | null;
       has_received: boolean;
       total_paid: number;
+      status: string;
       profiles: {
         full_name: string;
       };

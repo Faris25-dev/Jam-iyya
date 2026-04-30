@@ -105,17 +105,16 @@ export async function POST(req: Request) {
     // If the chat is in the context of a specific circle, fetch its data
     if (jam3iyyaId) {
       // 0. Verify Membership explicitly
-      const { data: memberRecord, error: memberCheckError } = await supabase
+      const { data: memberRecord } = await supabase
         .from('jam3iyya_members')
         .select('id')
         .eq('jam3iyya_id', jam3iyyaId)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
         
-      if (memberCheckError || !memberRecord) {
-         // Not a member, proceed with empty context instead of throwing 403,
-         // to still allow AI response but without exposing private data.
-         console.warn(`User ${user.id} attempted to context load non-member circle ${jam3iyyaId}`);
+      if (!memberRecord) {
+         // Not a member — allow AI to answer but without exposing private circle data.
+         console.warn(`User ${user.id} is not a member of circle ${jam3iyyaId}, using empty context`);
       } else {
         // 1. Fetch the Jam3iyya details
         const { data: jam3iyya, error: jamError } = await supabase
@@ -126,8 +125,8 @@ export async function POST(req: Request) {
 
         if (!jamError && jam3iyya) {
           circleContext.name = jam3iyya.name;
-          circleContext.totalPot = jam3iyya.total_pot || 0;
-          circleContext.monthlyContribution = jam3iyya.monthly_contribution || 0;
+          circleContext.totalPot = (jam3iyya.monthly_amount || 0) * (jam3iyya.total_members || 0);
+          circleContext.monthlyContribution = jam3iyya.monthly_amount || 0;
 
           // 2. Fetch the members of this Jam3iyya
           const { data: members, error: membersError } = await supabase
@@ -136,7 +135,7 @@ export async function POST(req: Request) {
               user_id,
               turn_number,
               status,
-              profiles ( full_name, avatar_url )
+              profiles ( full_name, profile_image_url )
             `)
             .eq('jam3iyya_id', jam3iyyaId);
 
