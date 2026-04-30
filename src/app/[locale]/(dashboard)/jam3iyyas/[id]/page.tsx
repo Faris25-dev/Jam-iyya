@@ -144,7 +144,7 @@ export default function Jam3iyyaDetailPage() {
           minScore: apiCircle.min_trust_score || 0,
           type: apiCircle.type as 'public' | 'private' | 'semi_public',
           theme: 'default',
-          currentMonth: (apiCircle as any).current_month || 1,
+          currentMonth: apiCircle.current_month || 1,
           yourTurn: yourMember?.turn || 1,
           status: apiCircle.status as 'recruiting' | 'active' | 'completed' | 'cancelled',
           avgScore: apiCircle.min_trust_score || 0,

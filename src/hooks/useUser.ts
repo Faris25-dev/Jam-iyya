@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 
@@ -15,15 +15,22 @@ export interface Profile {
   preferred_language: string;
 }
 
+// Singleton client to avoid re-creating on every render
+let _client: ReturnType<typeof createClient> | null = null;
+function getClient() {
+  if (!_client) _client = createClient();
+  return _client;
+}
+
 export function useUser() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-
-  const supabase = createClient();
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
+    const supabase = getClient();
 
     async function fetchProfile(userId: string) {
       const { data, error } = await supabase
@@ -36,14 +43,14 @@ export function useUser() {
 
       if (error) {
         console.error("Error fetching profile:", error);
-      } else if (data && mounted) {
+      } else if (data && mountedRef.current) {
         setProfile(data as Profile);
       }
-      
-      if (mounted) setLoading(false);
+
+      if (mountedRef.current) setLoading(false);
     }
 
-    async function getSession() {
+    async function init() {
       const {
         data: { session },
         error,
@@ -51,7 +58,7 @@ export function useUser() {
 
       if (error) {
         console.error("Error getting session:", error);
-        if (mounted) {
+        if (mountedRef.current) {
           setUser(null);
           setProfile(null);
           setLoading(false);
@@ -60,10 +67,10 @@ export function useUser() {
       }
 
       if (session?.user) {
-        if (mounted) setUser(session.user);
+        if (mountedRef.current) setUser(session.user);
         await fetchProfile(session.user.id);
       } else {
-        if (mounted) {
+        if (mountedRef.current) {
           setUser(null);
           setProfile(null);
           setLoading(false);
@@ -71,20 +78,16 @@ export function useUser() {
       }
     }
 
-    getSession();
+    init();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        if (mounted) {
-          setUser(session.user);
-          // Set loading to true while fetching the profile on state change
-          setLoading(true);
-        }
+        if (mountedRef.current) setUser(session.user);
         await fetchProfile(session.user.id);
       } else {
-        if (mounted) {
+        if (mountedRef.current) {
           setUser(null);
           setProfile(null);
           setLoading(false);
@@ -93,12 +96,13 @@ export function useUser() {
     });
 
     return () => {
-      mounted = false;
+      mountedRef.current = false;
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, []); // stable empty deps — singleton client
 
   const signOut = async () => {
+    const supabase = getClient();
     await supabase.auth.signOut();
     window.location.href = "/";
   };

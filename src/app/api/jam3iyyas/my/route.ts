@@ -34,7 +34,7 @@ export async function GET() {
     }
 
     const jam3iyyas = (data ?? []).map((membership) => {
-      const circle = membership.jam3iyyas as Record<string, unknown>;
+      const circle = (membership as any).jam3iyyas as Record<string, unknown> | null;
       return {
         ...(circle ?? {}),
         id: membership.jam3iyya_id,

@@ -83,7 +83,7 @@ export async function GET() {
       status: string;
       has_received: boolean;
       turn_number: number | null;
-      jam3iyyas: Array<{
+      jam3iyyas: {
         id: string;
         name: string;
         monthly_amount: number;
@@ -91,13 +91,13 @@ export async function GET() {
         start_date: string;
         status: string;
         current_month: number;
-      }>;
+      } | null;
     }>;
 
-    const participatingMemberships = memberships.filter((membership) => membership.status === 'active');
-    const activeMemberships = participatingMemberships.filter((membership) => membership.jam3iyyas?.[0]?.status === 'active');
-    const completedMemberships = memberships.filter((membership) => membership.status === 'completed');
-    const defaultedMemberships = memberships.filter((membership) => membership.status === 'defaulted');
+    const participatingMemberships = memberships.filter((m) => m.status === 'active' && m.jam3iyyas);
+    const activeMemberships = participatingMemberships.filter((m) => m.jam3iyyas?.status === 'active');
+    const completedMemberships = memberships.filter((m) => m.status === 'completed');
+    const defaultedMemberships = memberships.filter((m) => m.status === 'defaulted');
 
     const totalContributedLifetime = roundMoney(
       (transactionsResult.data ?? [])
@@ -127,7 +127,7 @@ export async function GET() {
     );
 
     const monthlyObligation = roundMoney(
-      activeMemberships.reduce((sum, membership) => sum + toMoney(membership.jam3iyyas[0]?.monthly_amount), 0),
+      activeMemberships.reduce((sum, membership) => sum + toMoney(membership.jam3iyyas?.monthly_amount), 0),
     );
 
     const nextPaymentDue = (paymentsResult.data ?? [])[0]
@@ -143,7 +143,7 @@ export async function GET() {
     const nextPayoutCandidate = activeMemberships
       .filter((membership) => membership.turn_number !== null && membership.has_received === false)
       .map((membership) => {
-        const circle = membership.jam3iyyas[0];
+        const circle = membership.jam3iyyas;
         if (!circle) {
           return null;
         }

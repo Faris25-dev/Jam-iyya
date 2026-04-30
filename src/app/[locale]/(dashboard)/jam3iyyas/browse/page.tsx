@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useState, useEffect } from 'react';
 
 import { DS, THEME_MAP } from '@/components/prototype/design-system';
-import { MOCK_USER, type Jam } from '@/components/prototype/mock-data';
+import { type Jam } from '@/components/prototype/mock-data';
 import { AppButton, Card, GeoBg, ProgressBar } from '@/components/prototype/ui-library';
 
 type Locale = 'ar' | 'en';
@@ -273,7 +273,7 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
           currentMonth: 0,
           yourTurn: 0,
           status: jam.status,
-          avgScore: 500 + Math.random() * 300,
+          avgScore: jam.min_trust_score || 0,
           organizerAr: 'Creator',
           organizerEn: 'Creator',
           descriptionAr: jam.description || '',
@@ -331,7 +331,7 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
     totalPotLabel: t('totalPotLabel'),
     preview: t('preview'),
     profileScore: t('profileScore'),
-    pointsToGold: t('pointsToGold', { points: Math.max(0, 500 - MOCK_USER.trustScore) }),
+    pointsToGold: t('pointsToGold', { points: Math.max(0, 500) }),
     totalPotLabelShort: t('totalPotLabelShort'),
     totalPotValue: t('totalPotValue'),
     totalPotTitle: t('totalPotTitle'),
@@ -574,8 +574,8 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
               <span style={{ color: DS.colors.success, fontSize: 18 }}>◈</span>
               <span style={{ fontSize: 13, color: DS.colors.success, fontWeight: 600 }}>
                 {isRtl
-                  ? `درجة ثقتك ${MOCK_USER.trustScore} — ${labels.eligibleToJoin} ✓`
-                  : `Your score ${MOCK_USER.trustScore} — ${labels.eligibleToJoin} ✓`}
+                  ? `الحد الأدنى ${joinModal.minScore} — ${labels.eligibleToJoin} ✓`
+                  : `Min score ${joinModal.minScore} — ${labels.eligibleToJoin} ✓`}
               </span>
             </div>
             <AppButton variant="gold" size="lg" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleJoin(joinModal)}>

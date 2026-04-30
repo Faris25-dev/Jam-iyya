@@ -317,7 +317,8 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
   const [loading, setLoading] = useState(true);
 
   const { profile: userProfile, loading: userLoading } = useUser();
-  const showLoading = loading || userLoading;
+  // Show user profile data immediately from useUser (fast), stats load in background
+  const showSkeleton = userLoading;
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -328,15 +329,12 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
         ]);
 
         if (statsResponse.status === 401 || circlesResponse.status === 401) {
-          if (!isDev) {
-          router.push(`/${locale}/login`);
-          }
+          if (!isDev) router.push(`/${locale}/login`);
           return;
         }
 
         if (statsResponse.ok) {
-          const statsData = (await statsResponse.json()) as ProfileStatsResponse;
-          setStats(statsData);
+          setStats((await statsResponse.json()) as ProfileStatsResponse);
         }
 
         if (circlesResponse.ok) {
@@ -351,8 +349,10 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
     void loadDashboard();
   }, [isDev, locale, router]);
 
-  const trustScore = userProfile?.trust_score ?? 0;
-  const walletBalance = userProfile?.wallet_balance ?? 0;
+  // Use stats API as single source of truth for numbers — avoids flash of 0 → real value
+  const dataReady = stats !== null;
+  const trustScore = stats?.trust.score ?? userProfile?.trust_score ?? 0;
+  const walletBalance = stats?.wallet.balance ?? userProfile?.wallet_balance ?? 0;
   const fullName = userProfile?.full_name ?? '';
 
   const labels: DashboardStrings = {
@@ -391,12 +391,12 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
     payout: t('payout'),
     englishShort: t('englishShort'),
     arabicShort: t('arabicShort'),
-    pointsToReachGold: t('pointsToReachGold', { points: Math.max(0, (stats?.trust.next_tier_at ?? 600) - trustScore) }),
+    pointsToReachGold: t('pointsToReachGold', { points: stats ? Math.max(0, (stats.trust.next_tier_at ?? 600) - stats.trust.score) : '...' }),
   };
 
   const greetHour = new Date().getHours();
   const greeting = greetHour < 12 ? labels.goodMorning : greetHour < 17 ? labels.goodAfternoon : labels.goodEvening;
-  const tier = (userProfile?.tier as Tier) ?? DS.getTier(trustScore);
+  const tier = dataReady ? (stats.trust.tier as Tier) : ((userProfile?.tier as Tier) ?? DS.getTier(trustScore));
   const activeCircleCount = stats?.circles.active_count ?? activeCircles.length;
   const monthsToNextTurn = stats?.next_payout?.months_remaining ?? (activeCircles[0] ? Math.max(0, activeCircles[0].duration - activeCircles[0].currentMonth) : 0);
 
@@ -421,19 +421,41 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
           color: DS.colors.gold,
         },
       ]
-    : [
-        { name: labels.weddingFund, amount: 200, due: labels.dueMay1, color: DS.colors.gold },
-        { name: labels.businessCapital, amount: 500, due: labels.dueMay1, color: DS.colors.navyMid },
-      ];
+    : [];
+
+  // Shimmer skeleton helper
+  const Shimmer = ({ w = '100%', h = 16 }: { w?: string | number; h?: number }) => (
+    <div style={{ width: w, height: h, borderRadius: 8, background: 'rgba(255,255,255,0.1)', animation: 'shimmer 1.5s infinite', backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.05) 75%)', backgroundSize: '200% 100%' }} />
+  );
 
   return (
     <div style={{ minHeight: '100vh', background: DS.colors.bg, paddingBottom: 90 }} data-screen-label="Dashboard">
+      <style>{`@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }`}</style>
       <DashboardTopBar locale={locale} labels={labels} onSwitchLocale={() => router.push(`/${isRtl ? 'en' : 'ar'}/dashboard`)} />
 
       <div style={{ padding: '20px 16px', maxWidth: 520, margin: '0 auto' }}>
-        {showLoading ? <div style={{ fontSize: 12, color: DS.colors.muted, marginBottom: 12 }}>{isRtl ? 'جاري تحميل البيانات...' : 'Loading live data...'}</div> : null}
         <Card style={{ padding: 20, marginBottom: 16, overflow: 'hidden', position: 'relative', background: DS.colors.navy }}>
           <GeoBg opacity={0.06} />
+          {!dataReady ? (
+            /* --- Skeleton while stats load --- */
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <Shimmer w={140} h={14} />
+                  <Shimmer w={100} h={22} />
+                  <Shimmer w={80} h={16} />
+                  <Shimmer w={60} h={36} />
+                </div>
+                <Shimmer w={110} h={110} />
+              </div>
+              <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <Shimmer h={5} />
+                <Shimmer w={180} h={12} />
+              </div>
+            </div>
+          ) : (
+            /* --- Real data --- */
+            <>
           <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginBottom: 4 }}>{greeting}</div>
@@ -461,6 +483,8 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
             <ProgressBar value={trustScore} max={1000} color={TIER_STYLES[tier].color} height={5} />
             <div style={{ marginTop: 8, fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{labels.pointsToReachGold}</div>
           </div>
+            </>
+          )}
         </Card>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
