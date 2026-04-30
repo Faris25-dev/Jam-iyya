@@ -5,8 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { Card, JamiyyaWheel, TierBadge, AppButton, ProgressBar, TopBar } from '@/components/prototype/ui-library';
-import { CHAT_MESSAGES_DATA, MOCK_JAMS, type ChatMessage, type Jam } from '@/components/prototype/mock-data';
+import { CHAT_MESSAGES_DATA, MOCK_JAMS, type ChatMessage, type Jam, type JamMember } from '@/components/prototype/mock-data';
 import { DS } from '@/components/prototype/design-system';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type Locale = 'ar' | 'en';
 type DetailTab = 'wheel' | 'timeline' | 'chat';
@@ -48,12 +49,33 @@ type DetailStrings = {
   isUpcoming: string;
 };
 
-function parseJamId(id: string | string[] | undefined) {
-  if (Array.isArray(id)) {
-    return Number(id[0]);
-  }
+interface CircleApiResponse {
+  jam3iyya: {
+    id: string;
+    name: string;
+    description?: string;
+    monthly_amount: number;
+    total_members: number;
+    duration_months: number;
+    status: string;
+    members: Array<{
+      user_id: string;
+      turn_number: number | null;
+      has_received: boolean;
+      total_paid: number;
+      profiles: {
+        full_name: string;
+      };
+    }>;
+  };
+}
 
-  return Number(id);
+function createInitials(name: string): string {
+  return name
+    .split(' ')
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join('');
 }
 
 export default function Jam3iyyaDetailPage() {
@@ -62,16 +84,80 @@ export default function Jam3iyyaDetailPage() {
   const locale = (params?.locale === 'ar' ? 'ar' : 'en') as Locale;
   const t = useTranslations('detail');
   const isRtl = locale === 'ar';
-  const jamId = parseJamId(params?.id);
+  const circleId = params?.id as string;
 
-  // TODO: jam data should come from Person 2's circle API.
-  // TODO: chat responses should come from Person 3's chat API.
-  const jam = (Number.isFinite(jamId) ? MOCK_JAMS.find((item) => item.id === jamId) : undefined) || MOCK_JAMS[0];
+  const [jam, setJam] = useState<Jam | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<DetailTab>('wheel');
   const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>(CHAT_MESSAGES_DATA);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [typing, setTyping] = useState(false);
   const [wheelSize, setWheelSize] = useState(320);
+
+  // Fetch circle data from API
+  useEffect(() => {
+    async function fetchCircle() {
+      setError(null);
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/jam3iyyas/${circleId}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch circle: ${response.statusText}`);
+        }
+
+        const data: CircleApiResponse = await response.json();
+        const apiCircle = data.jam3iyya;
+
+        // Transform API response to Jam interface
+        const transformedMembers: JamMember[] = apiCircle.members.map((member, index) => {
+          const fullName = member.profiles?.full_name || 'Unknown';
+          return {
+            nameAr: fullName,
+            nameEn: fullName,
+            turn: member.turn_number || index + 1,
+            paid: member.total_paid > 0,
+            received: member.has_received,
+            initials: member.profiles?.full_name ? createInitials(member.profiles.full_name) : '?',
+            isYou: false, // TODO: Compare with current user from session
+            isLate: false, // TODO: Determine based on payment status and current month
+          };
+        });
+
+        const transformedJam: Jam = {
+          id: Math.random(), // Use a hash for backward compatibility
+          nameAr: apiCircle.name,
+          nameEn: apiCircle.name,
+          amount: apiCircle.monthly_amount,
+          totalMembers: apiCircle.total_members,
+          duration: apiCircle.duration_months,
+          minScore: 0,
+          type: 'public',
+          theme: 'default',
+          currentMonth: 1,
+          yourTurn: 1,
+          status: apiCircle.status,
+          avgScore: 400,
+          organizerAr: 'منظم الجمعية',
+          organizerEn: 'Circle Organizer',
+          descriptionAr: apiCircle.description || '',
+          descriptionEn: apiCircle.description || '',
+          insuranceFund: Math.round(apiCircle.monthly_amount * apiCircle.total_members * 0.05),
+          totalPot: apiCircle.monthly_amount * apiCircle.total_members,
+          members: transformedMembers,
+        };
+
+        setJam(transformedJam);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        setJam(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchCircle();
+  }, [circleId]);
 
   useEffect(() => {
     const updateSize = () => setWheelSize(Math.min(window.innerWidth - 32, 320));
@@ -80,6 +166,37 @@ export default function Jam3iyyaDetailPage() {
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
   }, []);
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: DS.colors.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        <div style={{ width: 48, height: 48, borderRadius: '50%', border: `3px solid ${DS.colors.border}`, borderTopColor: DS.colors.navy, animation: 'spin 1s linear infinite' }} />
+        <div style={{ color: DS.colors.muted, fontSize: 14 }}>Loading circle...</div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (error || !jam) {
+    return (
+      <div style={{ minHeight: '100vh', background: DS.colors.bg, display: 'flex', flexDirection: 'column' }}>
+        <TopBar
+          title="Error"
+          onBack={() => router.push(`/${locale}/dashboard`)}
+          lang={locale}
+          setLang={(nextLocale) => router.push(`/${nextLocale}/dashboard`)}
+        />
+        <div style={{ flex: 1, padding: '20px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+          <div style={{ padding: '16px', background: DS.colors.errorLight, border: `1px solid ${DS.colors.error}`, borderRadius: DS.radii.md, maxWidth: 400, textAlign: 'center' }}>
+            <div style={{ color: DS.colors.error, fontSize: 14, fontWeight: 600 }}>{error || 'Circle not found'}</div>
+          </div>
+          <button onClick={() => router.push(`/${locale}/dashboard`)} style={{ padding: '10px 20px', background: DS.colors.navy, color: '#fff', border: 'none', borderRadius: DS.radii.md, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+            {isRtl ? 'العودة' : 'Go Back'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const youMember = jam.members.find((member) => member.isYou);
   const paidCount = jam.members.filter((member) => member.paid).length;
@@ -121,17 +238,18 @@ export default function Jam3iyyaDetailPage() {
     isUpcoming: t('isUpcoming'),
   };
 
-  const sendMessage = () => {
-    if (!chatInput.trim()) {
+  const sendMessage = async () => {
+    if (!chatInput.trim() || !jam) {
       return;
     }
 
+    const userMessageText = chatInput;
     const userMessage: ChatMessage = {
       id: messages.length + 1,
       senderAr: labels.you,
       senderEn: labels.you,
-      textAr: chatInput,
-      textEn: chatInput,
+      textAr: userMessageText,
+      textEn: userMessageText,
       time: new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
       isAI: false,
       isYou: true,
@@ -141,26 +259,124 @@ export default function Jam3iyyaDetailPage() {
     setChatInput('');
     setTyping(true);
 
-    setTimeout(() => {
-      const reply = isRtl
-        ? `دورك في الشهر ${jam.yourTurn} — ستستلمين ${jam.amount * jam.totalMembers} ${t('jod')}.`
-        : `Your turn is month ${jam.yourTurn} — you will receive ${jam.amount * jam.totalMembers} ${t('jod')}.`;
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
 
+      if (!session) {
+        setMessages((current) => [
+          ...current,
+          {
+            id: current.length + 1,
+            senderAr: '✦ مساعد ذكي',
+            senderEn: '✦ AI Assistant',
+            textAr: 'خطأ: لم تتمكن من الاتصال. يرجى تسجيل الدخول مرة أخرى.',
+            textEn: 'Error: Unable to connect. Please log in again.',
+            time: new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            isAI: true,
+            isYou: false,
+          },
+        ]);
+        setTyping(false);
+        return;
+      }
+
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          jam3iyyaId: circleId,
+          messages: [{ role: 'user', content: userMessageText }],
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        setMessages((current) => [
+          ...current,
+          {
+            id: current.length + 1,
+            senderAr: '✦ مساعد ذكي',
+            senderEn: '✦ AI Assistant',
+            textAr: `خطأ: ${errorData.error || res.statusText}`,
+            textEn: `Error: ${errorData.error || res.statusText}`,
+            time: new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            isAI: true,
+            isYou: false,
+          },
+        ]);
+        setTyping(false);
+        return;
+      }
+
+      // Read the streaming response chunk by chunk
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let aiResponse = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const text = decoder.decode(value, { stream: true });
+          aiResponse += text;
+
+          // Update messages with the accumulated response
+          setMessages((current) => {
+            const lastMessage = current[current.length - 1];
+            if (lastMessage?.isAI && lastMessage?.textEn === aiResponse.slice(0, -text.length)) {
+              // Update existing AI message
+              return [
+                ...current.slice(0, -1),
+                {
+                  ...lastMessage,
+                  textAr: aiResponse,
+                  textEn: aiResponse,
+                },
+              ];
+            } else if (!lastMessage?.isAI) {
+              // Create new AI message
+              return [
+                ...current,
+                {
+                  id: current.length + 1,
+                  senderAr: '✦ مساعد ذكي',
+                  senderEn: '✦ AI Assistant',
+                  textAr: aiResponse,
+                  textEn: aiResponse,
+                  time: new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                  isAI: true,
+                  isYou: false,
+                },
+              ];
+            }
+            return current;
+          });
+        }
+      }
+
+      setTyping(false);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error occurred';
       setMessages((current) => [
         ...current,
         {
           id: current.length + 1,
           senderAr: '✦ مساعد ذكي',
           senderEn: '✦ AI Assistant',
-          textAr: reply,
-          textEn: reply,
+          textAr: `خطأ الشبكة: ${errorMsg}`,
+          textEn: `Network Error: ${errorMsg}`,
           time: new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
           isAI: true,
           isYou: false,
         },
       ]);
       setTyping(false);
-    }, 1600);
+    }
   };
 
   const aiHints = isRtl

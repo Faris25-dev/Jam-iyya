@@ -2,14 +2,15 @@
 
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import { DS, THEME_MAP } from '@/components/prototype/design-system';
-import { MARKETPLACE_JAMS, MOCK_USER, type Jam } from '@/components/prototype/mock-data';
+import { MOCK_USER, type Jam } from '@/components/prototype/mock-data';
 import { AppButton, Card, GeoBg, ProgressBar } from '@/components/prototype/ui-library';
 
 type Locale = 'ar' | 'en';
 type Tier = 'bronze' | 'silver' | 'gold' | 'platinum';
+type BrowseJam = Jam & { uuid: string };
 
 const TIER_STYLES: Record<Tier, { color: string; bg: string }> = {
   bronze: { color: '#B87333', bg: '#FAEEE3' },
@@ -136,12 +137,12 @@ function MarketplaceJamCard({
   onJoin,
   onOpen,
 }: Readonly<{
-  jam: Jam;
+  jam: BrowseJam;
   locale: Locale;
   labels: MarketplaceStrings;
   showJoin?: boolean;
-  onJoin?: (jam: Jam) => void;
-  onOpen: (jam: Jam) => void;
+  onJoin?: (jam: BrowseJam) => void;
+  onOpen: (jam: BrowseJam) => void;
 }>) {
   const isRtl = locale === 'ar';
   const theme = THEME_MAP[jam.theme as keyof typeof THEME_MAP] || {
@@ -231,13 +232,69 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
   const router = useRouter();
   const isRtl = locale === 'ar';
 
-  // TODO: filter/search results should come from the real marketplace API.
-  // TODO: trust score eligibility should come from useUser().
+  // State for API data
+  const [jams, setJams] = useState<BrowseJam[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // State for UI filters
   const [search, setSearch] = useState('');
   const [filterTier, setFilterTier] = useState<'all' | Tier>('all');
   const [filterAmt, setFilterAmt] = useState<'all' | 'low' | 'mid' | 'high'>('all');
-  const [joinModal, setJoinModal] = useState<Jam | null>(null);
-  const [joined, setJoined] = useState<number | null>(null);
+  const [joinModal, setJoinModal] = useState<BrowseJam | null>(null);
+  const [joinToastMessage, setJoinToastMessage] = useState<string | null>(null);
+
+  // Fetch circles from API
+  useEffect(() => {
+    const fetchJams = async () => {
+      setError(null);
+      try {
+        setLoading(true);
+        const response = await fetch('/api/jam3iyyas?status=recruiting&type=public&limit=50');
+        
+        if (!response.ok) {
+          throw new Error(response.statusText || 'Failed to fetch circles');
+        }
+        
+        const data = await response.json();
+        
+        // Transform API response to match Jam interface
+        const transformed: BrowseJam[] = (data.jam3iyyas || []).map((jam: any) => ({
+          id: jam.id.split('-')[0].charCodeAt(0) % 1000, // Simple numeric ID from UUID
+          uuid: jam.id,
+          nameAr: jam.name,
+          nameEn: jam.name,
+          amount: jam.monthly_amount,
+          totalMembers: jam.total_members,
+          duration: jam.duration_months,
+          minScore: jam.min_trust_score || 100,
+          type: jam.type,
+          theme: 'default',
+          currentMonth: 0,
+          yourTurn: 0,
+          status: jam.status,
+          avgScore: 500 + Math.random() * 300,
+          organizerAr: 'Creator',
+          organizerEn: 'Creator',
+          descriptionAr: jam.description || '',
+          descriptionEn: jam.description || '',
+          insuranceFund: (jam.monthly_amount * jam.total_members) * 0.1,
+          totalPot: jam.monthly_amount * jam.total_members,
+          members: [],
+          slots: Math.max(0, jam.total_members - (jam.current_members_count || 0)),
+        }));
+        
+        setJams(transformed);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        setJams([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJams();
+  }, []);
 
   const labels: MarketplaceStrings = {
     marketplaceTitle: t('marketplaceTitle'),
@@ -298,7 +355,7 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
     { id: 'high', label: labels.over500 },
   ];
 
-  const filtered = MARKETPLACE_JAMS.filter((jam) => {
+  const filtered = jams.filter((jam) => {
     const name = isRtl ? jam.nameAr : jam.nameEn;
     const matchSearch = !search || name.toLowerCase().includes(search.toLowerCase());
     const matchTier = filterTier === 'all' || DS.getTier(jam.minScore || 0) === filterTier;
@@ -311,16 +368,48 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
     return matchSearch && matchTier && matchAmt;
   });
 
-  const smartMatch = MARKETPLACE_JAMS.find((jam) => jam.id === 3);
+  const smartMatch = jams.find((jam) => jam.id === 3) || jams[0];
 
-  const handleJoin = (jam: Jam) => {
-    setJoinModal(null);
-    setJoined(jam.id);
-    setTimeout(() => setJoined(null), 3000);
+  const handleJoin = async (jam: BrowseJam) => {
+    try {
+      const response = await fetch(`/api/jam3iyyas/${jam.uuid}/join`, {
+        method: 'POST',
+      });
+
+      const payload = await response.json();
+      const isJoined = response.status === 200 || response.status === 201;
+      const isAlreadyMember =
+        payload?.error?.code === 'ALREADY_MEMBER' ||
+        payload?.error?.message?.en === 'You are already a member';
+
+      if (isAlreadyMember) {
+        setJoinModal(null);
+        setJoinToastMessage('أنت بالفعل عضو في هذه الجمعية');
+        setTimeout(() => setJoinToastMessage(null), 3000);
+        return;
+      }
+
+      if (!isJoined) {
+        throw new Error(payload?.error?.message?.en || payload?.error || 'Join failed');
+      }
+
+      // Optimistic UI update: remove joined circle immediately from displayed list
+      setJams((prev) => prev.filter((item) => item.uuid !== jam.uuid));
+      setJoinModal(null);
+      setJoinToastMessage(labels.joinSuccess);
+
+      setTimeout(() => {
+        setJoinToastMessage(null);
+        router.push('/ar/dashboard');
+      }, 1500);
+    } catch (joinError) {
+      setJoinModal(null);
+      setError(joinError instanceof Error ? joinError.message : 'Join failed');
+    }
   };
 
-  const openJam = (jam: Jam) => {
-    router.push(`/${locale}/jam3iyyas/${jam.id}`);
+  const openJam = (jam: BrowseJam) => {
+    router.push(`/${locale}/jam3iyyas/${jam.uuid}`);
   };
 
   return (
@@ -367,6 +456,22 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
           ))}
         </div>
 
+        {loading && (
+          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div style={{ fontSize: 24, marginBottom: 12, color: DS.colors.muted, animation: 'spin 2s linear infinite' }}>◎</div>
+            <div style={{ color: DS.colors.muted, fontSize: 14 }}>Loading circles...</div>
+          </div>
+        )}
+
+        {error && (
+          <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: DS.radii.md, padding: '14px 16px', marginBottom: 16 }}>
+            <div style={{ color: '#DC2626', fontSize: 14, fontWeight: 500 }}>Error loading circles</div>
+            <div style={{ color: '#991B1B', fontSize: 12, marginTop: 4 }}>{error}</div>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <>
         {!search && smartMatch && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -400,8 +505,8 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
                 <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: DS.radii.md, padding: '8px 12px', marginBottom: 12 }}>
                   <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
                     {isRtl
-                      ? `✦ مثالية لملفك — متوسط درجة الثقة ${smartMatch.avgScore} · ${smartMatch.slots} ${labels.spotsLeft}`
-                      : `✦ Perfect for your profile — avg trust score ${smartMatch.avgScore} · ${smartMatch.slots} ${labels.spotsLeft}`}
+                      ? `✦ مثالية لملفك — متوسط درجة الثقة ${Math.round(smartMatch.avgScore)} · ${smartMatch.slots} ${labels.spotsLeft}`
+                      : `✦ Perfect for your profile — avg trust score ${Math.round(smartMatch.avgScore)} · ${smartMatch.slots} ${labels.spotsLeft}`}
                   </span>
                 </div>
 
@@ -437,6 +542,8 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
             <div style={{ fontSize: 40, marginBottom: 12, color: DS.colors.muted }}>◎</div>
             <div style={{ color: DS.colors.muted, fontSize: 15 }}>{labels.noMatchingCircles}</div>
           </div>
+        )}
+          </>
         )}
       </div>
 
@@ -478,13 +585,13 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
         </div>
       )}
 
-      {joined && (
+      {joinToastMessage && (
         <div style={{ position: 'fixed', bottom: 100, left: '50%', transform: 'translateX(-50%)', background: DS.colors.success, color: '#fff', borderRadius: DS.radii.md, padding: '12px 24px', fontWeight: 700, fontSize: 14, zIndex: 300, boxShadow: DS.shadow.lg, whiteSpace: 'nowrap', animation: 'slideUp 0.3s ease' }}>
-          {labels.joinSuccess}
+          {joinToastMessage}
         </div>
       )}
 
-      <style>{`@keyframes slideUp { from { opacity:0; transform:translateX(-50%) translateY(16px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`}</style>
+      <style>{`@keyframes slideUp { from { opacity:0; transform:translateX(-50%) translateY(16px); } to { opacity:1; transform:translateX(-50%) translateY(0); } } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

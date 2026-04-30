@@ -189,7 +189,7 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
     if (loading) return;
 
     if (!form.nameAr.trim() && !form.nameEn.trim()) {
-      setErrorMessage('Circle name is required');
+      setErrorMessage(isRtl ? 'اسم الجمعية مطلوب' : 'Circle name is required');
       return;
     }
 
@@ -197,32 +197,54 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
     setErrorMessage(null);
 
     try {
+      // Map form type to API type
+      const typeMap = {
+        'private': 'private',
+        'semi': 'semi_public',
+        'public': 'public',
+      };
+
+      // Map allocation to API turn_allocation_method
+      const allocationMap = {
+        'lottery': 'lottery',
+        'auction': 'auction',
+        'need': 'manual',
+        'order': 'first_come',
+      };
+
       const response = await fetch('/api/jam3iyyas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: (form.nameAr || form.nameEn || labels.newCircle).trim(),
-          description: form.nameEn || form.nameAr || null,
-          type: form.type,
+          description: form.nameEn || form.nameAr || '',
+          type: typeMap[form.type],
           monthly_amount: form.amount,
           total_members: form.members,
-          duration_months: form.members,
+          duration_months: form.duration,
           start_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
           min_trust_score: form.minScore,
-          turn_allocation_method: form.allocation === 'order' ? 'first_come' : form.allocation,
+          turn_allocation_method: allocationMap[form.allocation],
         }),
       });
 
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload?.error?.details?.message || payload?.error || 'Failed to create circle');
+        const errorMsg = payload?.error?.details?.message || payload?.error || payload?.message || 'فشل في إنشاء الجمعية';
+        throw new Error(errorMsg);
       }
 
       setCreatedCircleId(payload.id || payload?.data?.id || null);
       setDone(true);
+
+      // Auto-redirect to dashboard after 2 seconds
+      setTimeout(() => {
+        router.push(`/${locale}/dashboard`);
+      }, 2000);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to create circle');
+      const errorMsg = error instanceof Error ? error.message : 'فشل في إنشاء الجمعية';
+      setErrorMessage(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -352,6 +374,7 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
           <div>
             <h3 style={{ fontWeight: 800, fontSize: 18, color: DS.colors.navy, marginBottom: 6 }}>{labels.inviteMembers}</h3>
             <p style={{ color: DS.colors.muted, fontSize: 14, marginBottom: 20 }}>{isRtl ? `تحتاج إلى ${form.members} عضو لبدء جمعيتك` : labels.needMembersToStart.replace('{members}', String(form.members))}</p>
+            {errorMessage ? <div style={{ background: DS.colors.errorLight, color: DS.colors.error, borderRadius: DS.radii.md, padding: '10px 12px', fontSize: 12, marginBottom: 16 }}>{errorMessage}</div> : null}
             {[
               { nameAr: 'سارة عبدالله', nameEn: 'Sara Abdullah', phone: '+962 77 111 2222', score: 650 },
               { nameAr: 'خالد مصطفى', nameEn: 'Khalid Mustafa', phone: '+962 79 333 4444', score: 720 },
@@ -379,8 +402,8 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
       </div>
 
       <div style={{ padding: '16px 20px 32px', background: DS.colors.card, borderTop: `1px solid ${DS.colors.border}` }}>
-        <AppButton variant={step === 3 ? 'gold' : 'primary'} size="lg" style={{ width: '100%', justifyContent: 'center' }} onClick={() => (step < 3 ? setStep((current) => (current + 1) as CreateStep) : void submitCircle())}>
-          {step < 3 ? labels.continue : loading ? '...' : labels.createCircleButton}
+        <AppButton variant={step === 3 ? 'gold' : 'primary'} size="lg" style={{ width: '100%', justifyContent: 'center', opacity: loading ? 0.6 : 1 }} onClick={() => (step < 3 ? setStep((current) => (current + 1) as CreateStep) : void submitCircle())} disabled={loading}>
+          {step < 3 ? labels.continue : loading ? (isRtl ? 'جاري الإنشاء...' : 'Creating...') : labels.createCircleButton}
         </AppButton>
       </div>
     </div>

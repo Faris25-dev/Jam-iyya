@@ -38,7 +38,7 @@ type WalletTransactionsResponse = {
   transactions: Array<{
     id: string;
     amount: number;
-    type: WalletTransaction['type'];
+    type: 'deposit' | 'withdrawal' | 'payout' | 'contribution' | 'insurance_contribution' | 'insurance_payout';
     direction: 'incoming' | 'outgoing';
     description: string | null;
     created_at: string;
@@ -66,48 +66,14 @@ const TRANSACTION_COLORS: Record<WalletTransaction['type'], { color: string; bg:
   contribution: { color: DS.colors.navy, bg: DS.colors.goldBg },
 };
 
-const TRANSACTIONS: WalletTransaction[] = [
-  {
-    id: '1',
-    type: 'deposit',
-    title: 'Bank transfer deposit',
-    subtitle: 'Funds added to wallet',
-    amount: 500,
-    time: 'Today · 09:30',
-    color: DS.colors.success,
-    bg: DS.colors.successLight,
-  },
-  {
-    id: '2',
-    type: 'contribution',
-    title: 'Wedding Fund contribution',
-    subtitle: 'Monthly contribution for active circle',
-    amount: -200,
-    time: 'Yesterday · 18:10',
-    color: DS.colors.navy,
-    bg: DS.colors.goldBg,
-  },
-  {
-    id: '3',
-    type: 'payout',
-    title: 'Circle payout received',
-    subtitle: 'Payout credited to available balance',
-    amount: 2400,
-    time: 'Apr 24 · 14:45',
-    color: DS.colors.gold,
-    bg: DS.colors.goldBg,
-  },
-  {
-    id: '4',
-    type: 'withdraw',
-    title: 'Cash out to card',
-    subtitle: 'Part of the balance was moved to card',
-    amount: -300,
-    time: 'Apr 20 · 11:15',
-    color: DS.colors.error,
-    bg: DS.colors.errorLight,
-  },
-];
+const normalizeTransactionType = (
+  type: WalletTransactionsResponse['transactions'][number]['type']
+): WalletTransaction['type'] => {
+  if (type === 'withdrawal') return 'withdraw';
+  if (type === 'insurance_contribution') return 'contribution';
+  if (type === 'insurance_payout') return 'payout';
+  return type;
+};
 
 export default function WalletPage({ params }: Readonly<{ params: { locale: string } }>) {
   const locale = (params.locale === 'ar' ? 'ar' : 'en') as Locale;
@@ -124,6 +90,9 @@ export default function WalletPage({ params }: Readonly<{ params: { locale: stri
   useEffect(() => {
     const loadWallet = async () => {
       try {
+        setErrorMessage(null);
+        setLoading(true);
+
         const [walletResponse, transactionsResponse] = await Promise.all([
           fetch('/api/wallet'),
           fetch('/api/wallet/transactions?limit=20'),
@@ -137,18 +106,23 @@ export default function WalletPage({ params }: Readonly<{ params: { locale: stri
         }
 
         if (!walletResponse.ok) {
-          throw new Error('Failed to load wallet');
+          const walletError = await walletResponse.json();
+          throw new Error(walletError?.error?.message?.[locale] ?? walletError?.error?.message?.en ?? 'Failed to load wallet');
         }
 
         const walletData = (await walletResponse.json()) as WalletSummary;
         setSummary(walletData);
 
-        if (transactionsResponse.ok) {
-          const txData = (await transactionsResponse.json()) as WalletTransactionsResponse;
-          setTransactions(txData.transactions);
+        if (!transactionsResponse.ok) {
+          const txError = await transactionsResponse.json();
+          throw new Error(txError?.error?.message?.[locale] ?? txError?.error?.message?.en ?? 'Failed to load transactions');
         }
+
+        const txData = (await transactionsResponse.json()) as WalletTransactionsResponse;
+        setTransactions(txData.transactions);
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : 'Failed to load wallet');
+        setTransactions([]);
       } finally {
         setLoading(false);
       }
@@ -203,18 +177,23 @@ export default function WalletPage({ params }: Readonly<{ params: { locale: stri
     { key: 'withdraw' as const, label: t('withdraw'), variant: 'secondary' as const, icon: '↓', onClick: () => void handleAction('withdraw') },
   ];
 
-  const displayTransactions = transactions.length > 0
-    ? transactions.map((transaction) => ({
-        id: transaction.id,
-        type: transaction.type,
-        title: transaction.description || transaction.type,
-        subtitle: transaction.direction === 'incoming' ? t('incoming') : t('outgoing'),
-        amount: transaction.amount,
-        time: new Date(transaction.created_at).toLocaleString(),
-        color: TRANSACTION_COLORS[transaction.type].color,
-        bg: TRANSACTION_COLORS[transaction.type].bg,
-      }))
-    : TRANSACTIONS;
+  const displayTransactions: WalletTransaction[] = transactions.map((transaction) => {
+    const normalizedType = normalizeTransactionType(transaction.type);
+    const signedAmount = transaction.direction === 'outgoing'
+      ? -Math.abs(transaction.amount)
+      : Math.abs(transaction.amount);
+
+    return {
+      id: transaction.id,
+      type: normalizedType,
+      title: transaction.description || normalizedType,
+      subtitle: transaction.direction === 'incoming' ? t('incoming') : t('outgoing'),
+      amount: signedAmount,
+      time: new Date(transaction.created_at).toLocaleString(),
+      color: TRANSACTION_COLORS[normalizedType].color,
+      bg: TRANSACTION_COLORS[normalizedType].bg,
+    };
+  });
 
   return (
     <div style={{ minHeight: '100vh', background: DS.colors.bg, paddingBottom: 90 }} data-screen-label="Wallet">
