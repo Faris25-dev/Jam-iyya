@@ -109,8 +109,12 @@ export default function Jam3iyyaDetailPage() {
         const data: CircleApiResponse = await response.json();
         const apiCircle = data.jam3iyya;
 
+        const supabase = createSupabaseBrowserClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+
         // Transform API response to Jam interface
-        const transformedMembers: JamMember[] = apiCircle.members.map((member, index) => {
+        const transformedMembers: JamMember[] = apiCircle.members.map((member: any, index: number) => {
           const fullName = member.profiles?.full_name || 'Unknown';
           return {
             nameAr: fullName,
@@ -119,10 +123,12 @@ export default function Jam3iyyaDetailPage() {
             paid: member.total_paid > 0,
             received: member.has_received,
             initials: member.profiles?.full_name ? createInitials(member.profiles.full_name) : '?',
-            isYou: false, // TODO: Compare with current user from session
-            isLate: false, // TODO: Determine based on payment status and current month
+            isYou: member.user_id === userId,
+            isLate: member.status === 'defaulted' || member.status === 'late',
           };
         });
+
+        const yourMember = transformedMembers.find(m => m.isYou);
 
         const transformedJam: Jam = {
           id: apiCircle.id,
@@ -131,13 +137,13 @@ export default function Jam3iyyaDetailPage() {
           amount: apiCircle.monthly_amount,
           totalMembers: apiCircle.total_members,
           duration: apiCircle.duration_months,
-          minScore: 0,
-          type: 'public',
+          minScore: apiCircle.min_trust_score || 0,
+          type: apiCircle.type as 'public' | 'private' | 'semi_public',
           theme: 'default',
-          currentMonth: 1,
-          yourTurn: 1,
-          status: apiCircle.status,
-          avgScore: 400,
+          currentMonth: (apiCircle as any).current_month || 1,
+          yourTurn: yourMember?.turn || 1,
+          status: apiCircle.status as 'recruiting' | 'active' | 'completed' | 'cancelled',
+          avgScore: apiCircle.min_trust_score || 0,
           organizerAr: 'منظم الجمعية',
           organizerEn: 'Circle Organizer',
           descriptionAr: apiCircle.description || '',
@@ -157,6 +163,48 @@ export default function Jam3iyyaDetailPage() {
     }
 
     fetchCircle();
+  }, [circleId]);
+
+  // Fetch chat history from API
+  useEffect(() => {
+    async function fetchChatHistory() {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) return;
+
+        const response = await fetch(`/api/ai/chat?jam3iyyaId=${circleId}`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`
+          }
+        });
+        
+        if (response.ok) {
+          const payload = await response.json();
+          if (payload.messages && Array.isArray(payload.messages)) {
+             const loadedMessages: ChatMessage[] = payload.messages.map((m: any, idx: number) => {
+                const isAssistant = m.role === 'assistant';
+                return {
+                  id: idx + 1,
+                  senderAr: isAssistant ? '✦ مساعد ذكي' : 'أنت',
+                  senderEn: isAssistant ? '✦ AI Assistant' : 'You',
+                  textAr: m.content,
+                  textEn: m.content,
+                  time: new Date(m.created_at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                  isAI: isAssistant,
+                  isYou: !isAssistant
+                };
+             });
+             setMessages(loadedMessages);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load chat history:', err);
+      }
+    }
+
+    fetchChatHistory();
   }, [circleId]);
 
   useEffect(() => {
@@ -281,6 +329,12 @@ export default function Jam3iyyaDetailPage() {
         return;
       }
 
+      const apiMessages = messages.map(m => ({
+        role: m.isAI ? 'assistant' : 'user',
+        content: isRtl ? m.textAr : m.textEn
+      }));
+      apiMessages.push({ role: 'user', content: userMessageText });
+
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: {
@@ -289,7 +343,7 @@ export default function Jam3iyyaDetailPage() {
         },
         body: JSON.stringify({
           jam3iyyaId: circleId,
-          messages: [{ role: 'user', content: userMessageText }],
+          messages: apiMessages,
         }),
       });
 
