@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { calculateInitialScore, getTier, InitialTrustFactors } from '@/lib/ai/trust-engine'
 
+const OTP_BYPASS = process.env.NODE_ENV !== 'production'
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()
@@ -16,11 +18,24 @@ export async function POST(request: Request) {
 
     const supabase = await createServerClient()
 
-    const { data: { user }, error: verifyError } = await supabase.auth.verifyOtp({
-      phone,
-      token,
-      type: 'sms',
-    })
+    let user
+    let verifyError
+
+    if (OTP_BYPASS) {
+      // In development, get the authenticated user instead of verifying OTP
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+      user = authUser
+      verifyError = authError
+    } else {
+      // In production, verify the OTP token
+      const { data: { user: verifiedUser }, error: otpError } = await supabase.auth.verifyOtp({
+        phone,
+        token,
+        type: 'sms',
+      })
+      user = verifiedUser
+      verifyError = otpError
+    }
 
     if (verifyError) {
       return NextResponse.json(

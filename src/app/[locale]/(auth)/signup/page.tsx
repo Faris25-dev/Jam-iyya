@@ -115,8 +115,25 @@ export default function SignupPage({ params }: Readonly<{ params: { locale: stri
       }
 
       if (OTP_BYPASS) {
+        // In development, automatically verify OTP with a dummy token to create profile
+        try {
+          const verifyResponse = await fetch('/api/auth/verify-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: formattedPhone, token: '000000' }),
+          });
+
+          const verifyPayload = (await verifyResponse.json()) as { success?: boolean; user?: { profile?: { trust_score?: number } } };
+          if (verifyResponse.ok && verifyPayload.success) {
+            const score = verifyPayload.user?.profile?.trust_score || 320;
+            setFinalScore(score);
+          } else {
+            setFinalScore(320);
+          }
+        } catch {
+          setFinalScore(320);
+        }
         setStep(2);
-        setFinalScore(320);
       } else {
         setStep(1);
         setTimeout(() => otpRefs.current[0]?.focus(), 60);
