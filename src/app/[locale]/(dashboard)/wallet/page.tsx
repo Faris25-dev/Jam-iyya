@@ -87,6 +87,11 @@ export default function WalletPage({ params }: Readonly<{ params: { locale: stri
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<'deposit' | 'withdraw'>('deposit');
+  const [modalAmount, setModalAmount] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+
   useEffect(() => {
     const loadWallet = async () => {
       try {
@@ -148,33 +153,49 @@ export default function WalletPage({ params }: Readonly<{ params: { locale: stri
     }
   };
 
-  const handleAction = async (type: 'deposit' | 'withdraw') => {
-    const amountValue = window.prompt(type === 'deposit' ? t('deposit') : t('withdraw'));
-    const amount = Number(amountValue);
-
-    if (!amountValue || Number.isNaN(amount) || amount <= 0) {
-      return;
-    }
-
-    const response = await fetch('/api/wallet', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, amount }),
-    });
-
-    const payload = await response.json();
-    if (!response.ok) {
-      setErrorMessage(payload?.error?.message?.[locale] ?? payload?.error?.message ?? t('walletTipBody'));
-      return;
-    }
-
+  const openModal = (type: 'deposit' | 'withdraw') => {
+    setModalType(type);
+    setModalAmount('');
     setErrorMessage(null);
-    await refreshWallet();
+    setModalOpen(true);
+  };
+
+  const confirmAction = async () => {
+    const amount = Number(modalAmount);
+
+    if (!modalAmount || Number.isNaN(amount) || amount <= 0) {
+      setErrorMessage(isRtl ? 'الرجاء إدخال مبلغ صالح' : 'Please enter a valid amount');
+      return;
+    }
+
+    setActionLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch('/api/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: modalType, amount }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        setErrorMessage(payload?.error?.message?.[locale] ?? payload?.error?.message ?? payload?.error ?? t('walletTipBody'));
+        return;
+      }
+
+      setModalOpen(false);
+      await refreshWallet();
+    } catch (e) {
+      setErrorMessage(isRtl ? 'حدث خطأ' : 'An error occurred');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const actionButtons = [
-    { key: 'deposit' as const, label: t('deposit'), variant: 'gold' as const, icon: '+', onClick: () => void handleAction('deposit') },
-    { key: 'withdraw' as const, label: t('withdraw'), variant: 'secondary' as const, icon: '↓', onClick: () => void handleAction('withdraw') },
+    { key: 'deposit' as const, label: t('deposit'), variant: 'gold' as const, icon: '+', onClick: () => void openModal('deposit') },
+    { key: 'withdraw' as const, label: t('withdraw'), variant: 'secondary' as const, icon: '↓', onClick: () => void openModal('withdraw') },
   ];
 
   const displayTransactions: WalletTransaction[] = transactions.map((transaction) => {
@@ -298,6 +319,88 @@ export default function WalletPage({ params }: Readonly<{ params: { locale: stri
           </div>
         </Card>
       </div>
+
+      {modalOpen && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16
+        }} onClick={() => !actionLoading && setModalOpen(false)}>
+          <div 
+            style={{
+              background: DS.colors.bg, borderRadius: DS.radii.xl,
+              width: '100%', maxWidth: 400, padding: 24,
+              animation: 'zoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div style={{ fontSize: 20, fontWeight: 900, color: DS.colors.navy, letterSpacing: '-0.02em' }}>
+                {modalType === 'deposit' ? t('deposit') : t('withdraw')}
+              </div>
+              <button 
+                onClick={() => setModalOpen(false)}
+                style={{ background: DS.colors.card, border: `1px solid ${DS.colors.border}`, borderRadius: '50%', fontSize: 20, color: DS.colors.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, transition: 'all 0.2s' }}
+                disabled={actionLoading}
+              >×</button>
+            </div>
+            
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: DS.colors.navy, marginBottom: 8 }}>
+                 {isRtl ? 'المبلغ المطلوب (د.أ)' : 'Amount (JOD)'}
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  autoFocus
+                  value={modalAmount}
+                  onChange={(e) => {
+                    setErrorMessage(null);
+                    setModalAmount(e.target.value);
+                  }}
+                  placeholder="0.00"
+                  disabled={actionLoading}
+                  style={{
+                    width: '100%', padding: '16px', fontSize: 28, fontWeight: 800,
+                    color: DS.colors.navy, background: DS.colors.card, border: `2px solid ${errorMessage ? DS.colors.error : DS.colors.navy}20`,
+                    borderRadius: DS.radii.lg, outline: 'none', boxSizing: 'border-box',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onFocus={(e) => { e.target.style.borderColor = errorMessage ? DS.colors.error : DS.colors.navy; }}
+                  onBlur={(e) => { e.target.style.borderColor = errorMessage ? DS.colors.error : `${DS.colors.navy}20`; }}
+                />
+                <div style={{ position: 'absolute', right: isRtl ? 'auto' : 16, left: isRtl ? 16 : 'auto', top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: DS.colors.muted, fontSize: 16 }}>
+                  {t('jod')}
+                </div>
+              </div>
+              {errorMessage && (
+                <div style={{ color: DS.colors.error, fontSize: 13, marginTop: 8, fontWeight: 600 }}>
+                  {errorMessage}
+                </div>
+              )}
+            </div>
+
+            <AppButton 
+              variant={modalType === 'deposit' ? 'gold' : 'secondary'}
+              size="lg" 
+              onClick={confirmAction} 
+              disabled={actionLoading || !modalAmount}
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              {actionLoading ? '...' : (modalType === 'deposit' ? t('deposit') : t('withdraw'))}
+            </AppButton>
+          </div>
+        </div>
+      )}
+      
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes zoomIn {
+          from { transform: scale(0.95); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+      `}} />
     </div>
   );
 }
