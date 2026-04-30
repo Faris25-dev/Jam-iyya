@@ -32,6 +32,18 @@ export default function TestTrustScore() {
     setLoading(false);
   };
 
+  const testCurrentScore = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/trust-score');
+      const data = await res.json();
+      setResult(data);
+    } catch (e: any) {
+      setResult({ error: e.message });
+    }
+    setLoading(false);
+  };
+
   const testHistory = async () => {
     setLoading(true);
     try {
@@ -71,6 +83,13 @@ export default function TestTrustScore() {
           className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow disabled:opacity-50"
         >
           {loading ? 'Testing...' : 'Test Initial Calculation'}
+        </button>
+        <button 
+          onClick={testCurrentScore} 
+          disabled={loading}
+          className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg shadow disabled:opacity-50"
+        >
+          {loading ? 'Fetching...' : 'Check Current Score'}
         </button>
         <button 
           onClick={testHistory} 
