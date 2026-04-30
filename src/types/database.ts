@@ -37,6 +37,7 @@ export interface Database {
           insurance_percentage: number;
           insurance_pool: number;
           turn_allocation_method: 'lottery' | 'auction' | 'first_come' | 'manual';
+          current_month: number;
           created_at: string;
           updated_at: string;
         };
