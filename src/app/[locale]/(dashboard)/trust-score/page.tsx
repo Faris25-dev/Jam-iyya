@@ -6,6 +6,7 @@ import { CheckCircle2, Circle, TrendingUp, TrendingDown, Shield, Landmark, Activ
 
 import { DS } from '@/components/prototype/design-system';
 import { Card, TopBar, AppButton } from '@/components/prototype/ui-library';
+import { EmptyState } from '@/components/shared/empty-state';
 
 type Locale = 'ar' | 'en';
 
@@ -255,6 +256,9 @@ export default function TrustScorePage() {
 
   const title = isRtl ? 'درجة الثقة' : 'Trust Score';
 
+  // EDGE CASE: Check if user is completely new (no score, no history, no factors)
+  const isCompletelyNew = score === 0 && history.length === 0 && completedCount === 0;
+
   // ---------------------------------------------------------------------------
   // Factor items
   // ---------------------------------------------------------------------------
@@ -265,6 +269,20 @@ export default function TrustScorePage() {
     { key: 'income', label: isRtl ? 'إثبات الدخل' : 'Income Proof', done: factors.hasIncomeDoc, pts: 100 },
     { key: 'phone', label: isRtl ? `عمر رقم الهاتف: ${factors.phoneAgeMonths} شهر` : `Phone Age: ${factors.phoneAgeMonths} months`, done: factors.phoneAgeMonths > 0, pts: 100 },
   ];
+
+  // EMPTY STATE COMPONENT - For brand new users with no history
+  const emptyStateLabels = {
+    ar: {
+      title: 'لا توجد درجة ثقة بعد',
+      description: 'ابدأ رحلتك بتحميل هويتك والتحقق من حسابك البنكي لبناء درجة ثقة قوية.',
+      action: 'البدء الآن'
+    },
+    en: {
+      title: 'No trust score yet',
+      description: 'Start building your trust score by verifying your identity and linking your bank account.',
+      action: 'Get Started'
+    }
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: DS.colors.bg }} dir={isRtl ? 'rtl' : 'ltr'}>
@@ -287,8 +305,29 @@ export default function TrustScorePage() {
           </Card>
         )}
 
+        {/* ---- EMPTY STATE: Brand New User ---- */}
+        {!loading && isCompletelyNew && (
+          <div style={{ marginBottom: 24 }}>
+            <EmptyState
+              title={isRtl ? emptyStateLabels.ar.title : emptyStateLabels.en.title}
+              description={isRtl ? emptyStateLabels.ar.description : emptyStateLabels.en.description}
+            />
+            <div style={{ marginTop: 16 }}>
+              <AppButton
+                variant="gold"
+                size="lg"
+                onClick={() => window.location.assign(`/${locale}/settings`)}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                {isRtl ? '🎯 البدء' : '🎯 Get Started'}
+              </AppButton>
+            </div>
+          </div>
+        )}
+
         {/* ---- Score Hero Card ---- */}
-        <Card
+        {!isCompletelyNew && (
+          <Card
           style={{
             padding: '24px 18px',
             marginBottom: 16,
@@ -357,9 +396,11 @@ export default function TrustScorePage() {
             </>
           )}
         </Card>
+        )}
 
         {/* ---- Category Breakdown ---- */}
-        <Card style={{ padding: 16, marginBottom: 16 }}>
+        {!isCompletelyNew && (
+          <Card style={{ padding: 16, marginBottom: 16 }}>
           <div style={{ fontWeight: 800, fontSize: 16, color: DS.colors.navy, marginBottom: 14 }}>
             {isRtl ? 'تفصيل النقاط' : 'Score Breakdown'}
           </div>
@@ -396,9 +437,11 @@ export default function TrustScorePage() {
             </>
           )}
         </Card>
+        )}
 
         {/* ---- Verification Factors Checklist ---- */}
-        <Card style={{ padding: 16, marginBottom: 16 }}>
+        {!isCompletelyNew && (
+          <Card style={{ padding: 16, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: DS.colors.navy }}>
               {isRtl ? 'عوامل الثقة' : 'Trust Factors'}
@@ -463,9 +506,11 @@ export default function TrustScorePage() {
             </div>
           )}
         </Card>
+        )}
 
         {/* ---- History Timeline ---- */}
-        <Card style={{ padding: 16, marginBottom: 80 }}>
+        {!isCompletelyNew && (
+          <Card style={{ padding: 16, marginBottom: 80 }}>
           <div style={{ fontWeight: 800, fontSize: 16, color: DS.colors.navy, marginBottom: 12 }}>
             {isRtl ? 'سجل التغييرات' : 'Score History'}
           </div>
@@ -554,6 +599,7 @@ export default function TrustScorePage() {
             </div>
           )}
         </Card>
+        )}
       </div>
     </div>
   );

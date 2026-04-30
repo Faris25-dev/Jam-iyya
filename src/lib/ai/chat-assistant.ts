@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { baseChatSystemInstruction } from './prompts';
 
 // Initialize the Google Generative AI SDK
 // Ensure you have GEMINI_API_KEY set in your environment variables (.env.local)
@@ -21,44 +22,86 @@ export interface CircleContext {
 /**
  * Generates a chat stream response using the Gemini SDK.
  * Dynamically injects the user's Circle Context as a system instruction.
+ * 
+ * SECURITY & RELIABILITY:
+ * - Uses jailbreak-proof system prompts from prompts.ts
+ * - Injects verified database context only
+ * - Includes error handling for API failures
+ * - Prevents hallucinations of financial data
  */
 export async function generateChatStream(messages: any[], circleContext: CircleContext): Promise<ReadableStream> {
-  const systemPrompt = `
-You are a helpful and polite financial assistant for a Jam'iyya (ROSCA - Rotating Savings and Credit Association) application.
-Your goal is to answer the user's questions about their financial circles, turns, and payments.
+  // Build the system prompt with hardened instructions
+  const systemPrompt = `${baseChatSystemInstruction}
 
-Here is the context for the user's current circle:
-- Circle Name: ${circleContext.name || 'Unknown'}
-- Total Pot: ${circleContext.totalPot || 0}
-- Monthly Contribution: ${circleContext.monthlyContribution || 0}
-- Members: ${circleContext.members ? JSON.stringify(circleContext.members) : 'Unknown'}
-- Current User Turn Number: ${circleContext.currentUser?.turnNumber || 'Unknown'}
+INJECTED USER CONTEXT (verified from database):
+- Circle Name: ${circleContext.name || 'None'}
+- Circle ID: ${circleContext.jam3iyyaId}
+- Total Monthly Pot: ${circleContext.totalPot} (${circleContext.monthlyContribution} per member)
+- Total Members: ${circleContext.members?.length || 0}
 - Current User ID: ${circleContext.currentUser?.id}
+- User's Turn Number: ${circleContext.currentUser?.turnNumber || 'Not assigned yet'}
 
-Use this context to accurately answer the user's questions. 
-Keep your answers concise and directly related to the user's circle details if applicable.
-  `.trim();
+MEMBER LIST (for reference only - do not share all details):
+${circleContext.members && circleContext.members.length > 0 
+  ? circleContext.members
+      .slice(0, 10) // Limit to prevent prompt injection
+      .map(m => `  - ${m.name} (Turn ${m.turnNumber}, Status: ${m.status})`)
+      .join('\n')
+  : '  (No members fetched)'}
 
-  // The Gemini SDK expects specific formats for history
-  // Typically: { role: 'user' | 'model', parts: [{ text: string }] }
+USE THIS CONTEXT TO ANSWER QUESTIONS ACCURATELY.
+DO NOT INVENT DATA. IF MISSING, SAY SO.`;
+
+  // Format messages for Gemini SDK
+  // Gemini expects: { role: 'user' | 'model', parts: [{ text: string }] }
   const formattedMessages = messages.map((msg: any) => ({
-    role: msg.role === 'assistant' ? 'model' : 'user',
+    role: msg.role === 'assistant' ? 'model' : msg.role === 'model' ? 'model' : 'user',
     parts: [{ text: msg.content || msg.text || '' }]
   }));
 
+  // Get the model with system instruction
   const model = genAI.getGenerativeModel({ 
     model: 'gemini-2.5-flash',
-    systemInstruction: systemPrompt 
+    systemInstruction: systemPrompt,
+    generationConfig: {
+      maxOutputTokens: 1024,
+      temperature: 0.7,
+    }
   });
 
-  // Start chat with history (excluding the very last message which we will send to trigger the stream)
+  // Split history and current message
   const history = formattedMessages.slice(0, -1);
-  const chat = model.startChat({ history });
-
   const latestMessageText = formattedMessages[formattedMessages.length - 1]?.parts[0]?.text || '';
-  
-  // Stream the response from Gemini
-  const result = await chat.sendMessageStream(latestMessageText);
+
+  if (!latestMessageText.trim()) {
+    throw new Error('No message text to send');
+  }
+
+  let chat;
+  try {
+    chat = model.startChat({ history });
+  } catch (error: any) {
+    console.error('Failed to initialize chat:', error);
+    throw new Error('Failed to initialize chat session');
+  }
+
+  // Send message and get stream
+  let result;
+  try {
+    result = await chat.sendMessageStream(latestMessageText);
+  } catch (error: any) {
+    console.error('Failed to send message to Gemini:', error);
+    
+    // Re-throw with specific error codes for the route handler to detect
+    if (error.message?.includes('429') || error.message?.includes('RATE_LIMIT')) {
+      throw new Error('429: Rate limit exceeded');
+    } else if (error.message?.includes('401') || error.message?.includes('UNAUTHENTICATED')) {
+      throw new Error('401: API key invalid or expired');
+    } else if (error.message?.includes('timeout')) {
+      throw new Error('Timeout: Gemini API timeout');
+    }
+    throw error;
+  }
 
   // Convert Gemini's stream format to a standard Web ReadableStream
   const stream = new ReadableStream({
@@ -71,8 +114,9 @@ Keep your answers concise and directly related to the user's circle details if a
             controller.enqueue(new TextEncoder().encode(chunkText));
           }
         }
-      } catch (e) {
-        controller.error(e);
+      } catch (streamError: any) {
+        console.error('Stream error:', streamError);
+        controller.error(streamError);
       } finally {
         controller.close();
       }

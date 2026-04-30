@@ -1,6 +1,6 @@
 import Link from 'next/link';
-
 import { APP_NAME } from '@/lib/constants';
+import { NotificationBell } from './notification-bell';
 
 export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
@@ -14,6 +14,10 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
             <Link href="/ar/dashboard">Dashboard</Link>
             <Link href="/ar/jam3iyyas/browse">Jam3iyyas</Link>
             <Link href="/ar/wallet">Wallet</Link>
+            {/* Real-time Notification Bell */}
+            <div className="border-l border-border pl-4">
+              <NotificationBell locale="en" />
+            </div>
           </nav>
         </div>
       </header>
