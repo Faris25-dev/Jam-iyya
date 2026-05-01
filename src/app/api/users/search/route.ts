@@ -3,13 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 import { createServerClient } from '@/lib/supabase/server';
-import type { Database } from '@/types/database';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
   if (!url || !key) throw new Error('Service role key not configured');
-  return createClient<Database>(url, key, {
+  return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
@@ -32,15 +31,19 @@ export async function GET(request: NextRequest) {
 
   const admin = getAdminClient();
 
-  // Look up the user in auth.users by email
-  const { data: authUser, error: authError } = await admin.auth.admin.getUserByEmail(email);
+  // Supabase Auth Admin exposes paginated user listing, not direct email lookup.
+  const { data: authUsers, error: authError } = await admin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  const authUser = authUsers?.users.find((candidate) => candidate.email?.toLowerCase() === email);
 
-  if (authError || !authUser?.user) {
+  if (authError || !authUser) {
     return NextResponse.json({ error: 'No user found with that email' }, { status: 404 });
   }
 
   // Don't return yourself
-  if (authUser.user.id === session.user.id) {
+  if (authUser.id === session.user.id) {
     return NextResponse.json({ error: 'You are already the circle creator' }, { status: 400 });
   }
 
@@ -48,7 +51,7 @@ export async function GET(request: NextRequest) {
   const { data: profile, error: profileError } = await admin
     .from('profiles')
     .select('id, full_name, trust_score, tier, verification_status, profile_image_url')
-    .eq('id', authUser.user.id)
+    .eq('id', authUser.id)
     .single();
 
   if (profileError || !profile) {

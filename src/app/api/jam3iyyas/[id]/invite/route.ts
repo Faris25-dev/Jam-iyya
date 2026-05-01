@@ -3,13 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 import { createServerClient } from '@/lib/supabase/server';
-import type { Database } from '@/types/database';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
   if (!url || !key) throw new Error('Service role key not configured');
-  return createClient<Database>(url, key, {
+  return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
@@ -118,12 +117,16 @@ export async function POST(
   }
 
   // Notify the invited user
-  await admin.from('notifications').insert({
-    user_id: invitedUserId,
-    title: 'دعوة للانضمام لجمعية',
-    message: 'تمت إضافتك كعضو في جمعية جديدة',
-    type: 'invite',
-  }).then(() => null).catch(() => null);
+  try {
+    await admin.from('notifications').insert({
+      user_id: invitedUserId,
+      title: 'دعوة للانضمام لجمعية',
+      message: 'تمت إضافتك كعضو في جمعية جديدة',
+      type: 'invite',
+    });
+  } catch {
+    // Notification delivery should not block membership creation.
+  }
 
   return NextResponse.json({ membership, circle_activated: newCount >= circle.total_members }, { status: 201 });
 }

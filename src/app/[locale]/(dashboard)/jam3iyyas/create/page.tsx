@@ -92,6 +92,40 @@ const INITIAL_FORM: FormState = {
   minScore: 400,
 };
 
+function extractApiError(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== 'object') {
+    return fallback;
+  }
+
+  const candidate = payload as {
+    error?: string | { details?: { message?: string } };
+    details?: Record<string, { _errors?: string[] }>;
+    message?: string;
+  };
+
+  if (candidate.details && typeof candidate.details === 'object') {
+    for (const value of Object.values(candidate.details)) {
+      if (Array.isArray(value?._errors) && value._errors.length > 0) {
+        return value._errors[0];
+      }
+    }
+  }
+
+  if (typeof candidate.error === 'string' && candidate.error.trim()) {
+    return candidate.error;
+  }
+
+  if (candidate.error && typeof candidate.error === 'object' && typeof candidate.error.details?.message === 'string') {
+    return candidate.error.details.message;
+  }
+
+  if (typeof candidate.message === 'string' && candidate.message.trim()) {
+    return candidate.message;
+  }
+
+  return fallback;
+}
+
 export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { locale: string } }>) {
   const locale = (params.locale === 'ar' ? 'ar' : 'en') as Locale;
   const t = useTranslations('create');
@@ -182,7 +216,19 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
   const insurance = Math.round(totalPot * 0.015);
 
   const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      if (key === 'members') {
+        const syncedValue = Number(value);
+        return { ...current, members: syncedValue, duration: syncedValue };
+      }
+
+      if (key === 'duration') {
+        const syncedValue = Number(value);
+        return { ...current, duration: syncedValue, members: syncedValue };
+      }
+
+      return { ...current, [key]: value };
+    });
   };
 
   const submitCircle = async () => {
@@ -221,7 +267,7 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
           type: typeMap[form.type],
           monthly_amount: form.amount,
           total_members: form.members,
-          duration_months: form.duration,
+          duration_months: form.members,
           start_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
           min_trust_score: form.minScore,
           turn_allocation_method: allocationMap[form.allocation],
@@ -231,7 +277,7 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
       const payload = await response.json();
 
       if (!response.ok) {
-        const errorMsg = payload?.error?.details?.message || payload?.error || payload?.message || 'فشل في إنشاء الجمعية';
+        const errorMsg = extractApiError(payload, isRtl ? 'فشل في إنشاء الجمعية' : 'Failed to create circle');
         throw new Error(errorMsg);
       }
 
@@ -243,7 +289,7 @@ export default function CreateJam3iyyaPage({ params }: Readonly<{ params: { loca
         router.push(`/${locale}/dashboard`);
       }, 2000);
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'فشل في إنشاء الجمعية';
+      const errorMsg = error instanceof Error ? error.message : isRtl ? 'فشل في إنشاء الجمعية' : 'Failed to create circle';
       setErrorMessage(errorMsg);
     } finally {
       setLoading(false);

@@ -51,6 +51,41 @@ type ProfileStatsResponse = {
   };
 };
 
+type DemoPreviewResponse = {
+  would_process: number;
+  estimated_pot_total: number;
+  circles: Array<{
+    jam3iyya_id: string;
+    name: string;
+    month: number;
+    due_date: string;
+    days_until_due: number;
+    estimated_pot: number;
+  }>;
+  error?: string;
+};
+
+type DemoProcessResponse = {
+  processed_at: string;
+  total_circles: number;
+  successful: number;
+  failed: number;
+  errors: string[];
+  results: Array<{
+    jam3iyya_id: string;
+    name: string;
+    success: boolean;
+    month: number;
+    pot: number;
+    errors: string[];
+  }>;
+  error?: string;
+};
+
+type DemoResult =
+  | { mode: 'preview'; data: DemoPreviewResponse }
+  | { mode: 'process'; data: DemoProcessResponse };
+
 type Jam3iyyaApiRow = {
   id: string;
   name: string;
@@ -118,6 +153,16 @@ type DashboardStrings = {
   englishShort: string;
   arabicShort: string;
   pointsToReachGold: string;
+  demoControl: string;
+  previewCycles: string;
+  processCycles: string;
+  processing: string;
+  previewResult: string;
+  processResult: string;
+  noCycles: string;
+  successCount: string;
+  failCount: string;
+  errors: string;
 };
 
 function TierBadge({ score, lang, labels }: Readonly<{ score: number; lang: Locale; labels: DashboardStrings }>) {
@@ -306,6 +351,154 @@ function DashboardTopBar({
   );
 }
 
+function DemoControlPanel({ labels }: Readonly<{ labels: DashboardStrings }>) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<'preview' | 'process' | null>(null);
+  const [result, setResult] = useState<DemoResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const runDemoAction = async (mode: 'preview' | 'process') => {
+    setBusy(mode);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/payments/process-month?test=true', {
+        method: mode === 'preview' ? 'GET' : 'POST',
+      });
+      const data = (await response.json()) as DemoPreviewResponse | DemoProcessResponse;
+
+      if (!response.ok || data.error) {
+        throw new Error(data.error ?? 'Demo request failed');
+      }
+
+      setResult(mode === 'preview' ? { mode, data: data as DemoPreviewResponse } : { mode, data: data as DemoProcessResponse });
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Demo request failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const previewData = result?.mode === 'preview' ? result.data : null;
+  const processData = result?.mode === 'process' ? result.data : null;
+
+  return (
+    <Card style={{ marginTop: 16, padding: 16, border: `1.5px dashed ${DS.colors.gold}`, background: '#FFFCF4' }}>
+      <button
+        onClick={() => setOpen((current) => !current)}
+        style={{
+          width: '100%',
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+        }}
+      >
+        <span style={{ color: DS.colors.navy, fontWeight: 900, fontSize: 15 }}>{labels.demoControl}</span>
+        <span style={{ color: DS.colors.gold, fontWeight: 900 }}>{open ? '-' : '+'}</span>
+      </button>
+
+      {open ? (
+        <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <button
+              onClick={() => void runDemoAction('preview')}
+              disabled={busy !== null}
+              style={{
+                height: 42,
+                borderRadius: 12,
+                border: `1px solid ${DS.colors.gold}55`,
+                background: DS.colors.goldBg,
+                color: DS.colors.navy,
+                fontWeight: 900,
+                fontFamily: 'inherit',
+                cursor: busy ? 'wait' : 'pointer',
+                opacity: busy ? 0.65 : 1,
+              }}
+            >
+              {busy === 'preview' ? labels.processing : labels.previewCycles}
+            </button>
+            <button
+              onClick={() => void runDemoAction('process')}
+              disabled={busy !== null}
+              style={{
+                height: 42,
+                borderRadius: 12,
+                border: 'none',
+                background: DS.colors.navy,
+                color: '#fff',
+                fontWeight: 900,
+                fontFamily: 'inherit',
+                cursor: busy ? 'wait' : 'pointer',
+                opacity: busy ? 0.65 : 1,
+              }}
+            >
+              {busy === 'process' ? labels.processing : labels.processCycles}
+            </button>
+          </div>
+
+          {error ? (
+            <div style={{ borderRadius: 10, background: DS.colors.errorLight, color: DS.colors.error, padding: 10, fontSize: 12, fontWeight: 700 }}>
+              {error}
+            </div>
+          ) : null}
+
+          {previewData ? (
+            <div style={{ borderRadius: 12, background: '#fff', border: `1px solid ${DS.colors.border}`, padding: 12 }}>
+              <div style={{ fontWeight: 900, color: DS.colors.navy, marginBottom: 8 }}>{labels.previewResult}</div>
+              <div style={{ color: DS.colors.muted, fontSize: 12, marginBottom: 8 }}>
+                {previewData.would_process} {labels.circles} · {previewData.estimated_pot_total.toLocaleString()} {labels.jod}
+              </div>
+              {previewData.circles.length === 0 ? (
+                <div style={{ color: DS.colors.muted, fontSize: 12 }}>{labels.noCycles}</div>
+              ) : (
+                previewData.circles.map((circle) => (
+                  <div key={circle.jam3iyya_id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '7px 0', borderTop: `1px solid ${DS.colors.border}` }}>
+                    <span style={{ color: DS.colors.navy, fontWeight: 700, fontSize: 13 }}>{circle.name}</span>
+                    <span style={{ color: DS.colors.muted, fontSize: 12 }}>
+                      {labels.month} {circle.month} · {circle.estimated_pot.toLocaleString()} {labels.jod}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : null}
+
+          {processData ? (
+            <div style={{ borderRadius: 12, background: '#fff', border: `1px solid ${DS.colors.border}`, padding: 12 }}>
+              <div style={{ fontWeight: 900, color: DS.colors.navy, marginBottom: 8 }}>{labels.processResult}</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', color: DS.colors.muted, fontSize: 12, marginBottom: 8 }}>
+                <span>{processData.total_circles} {labels.circles}</span>
+                <span>{labels.successCount}: {processData.successful}</span>
+                <span>{labels.failCount}: {processData.failed}</span>
+              </div>
+              {processData.results.map((circle) => (
+                <div key={circle.jam3iyya_id} style={{ padding: '7px 0', borderTop: `1px solid ${DS.colors.border}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ color: DS.colors.navy, fontWeight: 700, fontSize: 13 }}>{circle.name}</span>
+                    <span style={{ color: circle.success ? DS.colors.success : DS.colors.error, fontWeight: 800, fontSize: 12 }}>
+                      {circle.success ? labels.successCount : labels.failCount}
+                    </span>
+                  </div>
+                  {circle.errors.length > 0 ? (
+                    <div style={{ color: DS.colors.error, fontSize: 12, marginTop: 4 }}>
+                      {labels.errors}: {circle.errors.join(', ')}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
 export default function DashboardPage({ params }: Readonly<{ params: { locale: string } }>) {
   const locale = (params.locale === 'ar' ? 'ar' : 'en') as Locale;
   const t = useTranslations('dashboard');
@@ -392,6 +585,16 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
     englishShort: t('englishShort'),
     arabicShort: t('arabicShort'),
     pointsToReachGold: t('pointsToReachGold', { points: stats ? Math.max(0, (stats.trust.next_tier_at ?? 600) - stats.trust.score) : '...' }),
+    demoControl: t('demoControl'),
+    previewCycles: t('previewCycles'),
+    processCycles: t('processCycles'),
+    processing: t('processing'),
+    previewResult: t('previewResult'),
+    processResult: t('processResult'),
+    noCycles: t('noCycles'),
+    successCount: t('successCount'),
+    failCount: t('failCount'),
+    errors: t('errors'),
   };
 
   const greetHour = new Date().getHours();
@@ -582,6 +785,7 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
             </svg>
           </div>
         </Card>
+        {isDev ? <DemoControlPanel labels={labels} /> : null}
       </div>
 
     </div>

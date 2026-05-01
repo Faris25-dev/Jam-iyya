@@ -8,6 +8,7 @@ export interface Profile {
   id: string;
   full_name: string | null;
   phone: string | null;
+  profile_image_url: string | null;
   trust_score: number;
   wallet_balance: number;
   verification_status: string;
@@ -22,6 +23,15 @@ function getClient() {
   return _client;
 }
 
+function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, label: string) {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+  });
+
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timeoutId));
+}
+
 export function useUser() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -33,43 +43,60 @@ export function useUser() {
     const supabase = getClient();
 
     async function fetchProfile(userId: string) {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select(
-          "id, full_name, phone, trust_score, wallet_balance, verification_status, tier, preferred_language"
-        )
-        .eq("id", userId)
-        .single();
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from("profiles")
+            .select(
+              "id, full_name, phone, profile_image_url, trust_score, wallet_balance, verification_status, tier, preferred_language"
+            )
+            .eq("id", userId)
+            .single(),
+          6000,
+          "Profile request"
+        );
 
-      if (error) {
+        if (error) {
+          console.error("Error fetching profile:", error);
+        } else if (data && mountedRef.current) {
+          setProfile(data as Profile);
+        }
+      } catch (error) {
         console.error("Error fetching profile:", error);
-      } else if (data && mountedRef.current) {
-        setProfile(data as Profile);
       }
 
       if (mountedRef.current) setLoading(false);
     }
 
     async function init() {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+          error,
+        } = await withTimeout(supabase.auth.getSession(), 6000, "Session request");
 
-      if (error) {
-        console.error("Error getting session:", error);
-        if (mountedRef.current) {
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
+        if (error) {
+          console.error("Error getting session:", error);
+          if (mountedRef.current) {
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+          }
+          return;
         }
-        return;
-      }
 
-      if (session?.user) {
-        if (mountedRef.current) setUser(session.user);
-        await fetchProfile(session.user.id);
-      } else {
+        if (session?.user) {
+          if (mountedRef.current) setUser(session.user);
+          await fetchProfile(session.user.id);
+        } else {
+          if (mountedRef.current) {
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+          }
+        }
+      } catch (error) {
+        console.error("Error initializing user:", error);
         if (mountedRef.current) {
           setUser(null);
           setProfile(null);
