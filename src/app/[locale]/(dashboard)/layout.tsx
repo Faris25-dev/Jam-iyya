@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { Settings } from 'lucide-react';
 
 import { DS } from '@/components/prototype/design-system';
 
@@ -152,6 +153,35 @@ function DashboardNavBar({ locale, pathname }: Readonly<{ locale: Locale; pathna
   );
 }
 
+function SettingsShortcut({ locale }: Readonly<{ locale: Locale }>) {
+  const isRtl = locale === 'ar';
+
+  return (
+    <Link
+      href={`/${locale}/settings`}
+      aria-label={locale === 'ar' ? 'الإعدادات' : 'Settings'}
+      title={locale === 'ar' ? 'الإعدادات' : 'Settings'}
+      style={{
+        position: 'fixed',
+        top: 12,
+        [isRtl ? 'left' : 'right']: 64,
+        zIndex: 120,
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        background: DS.colors.mutedLight,
+        color: DS.colors.navy,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxShadow: '0 4px 14px rgba(13,31,60,0.08)',
+      }}
+    >
+      <Settings size={18} strokeWidth={2.2} />
+    </Link>
+  );
+}
+
 export default function DashboardLayout({
   children,
   params,
@@ -165,6 +195,7 @@ export default function DashboardLayout({
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: showNav ? 90 : 0 }}>
+      <SettingsShortcut locale={locale} />
       {children}
       {showNav ? <DashboardNavBar locale={locale} pathname={pathname} /> : null}
     </div>
