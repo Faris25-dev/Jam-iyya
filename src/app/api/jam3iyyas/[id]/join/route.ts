@@ -3,6 +3,8 @@ import { createServerClient } from '@/lib/supabase/server';
 import { joinJam3iyya } from '@/lib/services/jam3iyya-service';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 const uuidSchema = z.string().uuid();
 
 const joinBodySchema = z.object({
@@ -38,9 +40,9 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const supabase = await createServerClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
@@ -63,7 +65,7 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { data, error } = await joinJam3iyya(params.id, session.user.id, bodyOptions);
+  const { data, error } = await joinJam3iyya(params.id, user.id, bodyOptions);
 
   if (error) {
     return NextResponse.json(

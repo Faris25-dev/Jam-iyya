@@ -3,6 +3,8 @@ import { createServerClient } from '@/lib/supabase/server';
 import { getJam3iyya, updateJam3iyya } from '@/lib/services/jam3iyya-service';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 const uuidSchema = z.string().uuid();
 
 const patchBodySchema = z.object({
@@ -22,9 +24,9 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   const supabase = await createServerClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
@@ -41,9 +43,9 @@ export async function GET(
   }
 
   // 3. Current User Membership Logic
-  const currentUserMemberData = circle.members.find(m => m.user_id === session.user.id) || null;
+  const currentUserMemberData = circle.members.find(m => m.user_id === user.id) || null;
   const isCurrentUserMember = !!currentUserMemberData;
-  const isCurrentUserCreator = circle.creator_id === session.user.id;
+  const isCurrentUserCreator = circle.creator_id === user.id;
 
   // 4. Privacy Check
   if (circle.type === 'private' && !isCurrentUserMember && !isCurrentUserCreator) {
@@ -77,9 +79,9 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   const supabase = await createServerClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
@@ -95,7 +97,7 @@ export async function PATCH(
   }
 
   // 2. Authorization Check
-  if (circle.creator_id !== session.user.id) {
+  if (circle.creator_id !== user.id) {
     return NextResponse.json({ error: 'Only the creator can update the circle' }, { status: 403 });
   }
 
@@ -130,7 +132,7 @@ export async function PATCH(
     const { data: updatedCircle, error: updateError } = await updateJam3iyya(
       params.id, 
       parsed.data, 
-      session.user.id
+      user.id
     );
 
     if (updateError) {

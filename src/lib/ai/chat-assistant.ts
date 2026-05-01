@@ -1,9 +1,31 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { baseChatSystemInstruction } from './prompts';
 
-// Initialize the Google Generative AI SDK
-// Ensure you have GEMINI_API_KEY set in your environment variables (.env.local)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const geminiApiKey = process.env.GEMINI_API_KEY ?? '';
+
+function createTextStream(text: string) {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(text));
+      controller.close();
+    },
+  });
+}
+
+function buildDemoResponse(circleContext: CircleContext) {
+  const circleName = circleContext.name && circleContext.name !== 'Unknown'
+    ? circleContext.name
+    : "this Jam'iyya";
+
+  return [
+    `Demo AI response for ${circleName}:`,
+    `- Monthly contribution: ${circleContext.monthlyContribution || 0} JOD`,
+    `- Total monthly pot: ${circleContext.totalPot || 0} JOD`,
+    `- Members loaded: ${circleContext.members?.length || 0}`,
+    '',
+    'Gemini is not configured on this machine, so I am using a safe hackathon fallback. Add GEMINI_API_KEY to enable the live assistant.',
+  ].join('\n');
+}
 
 export interface CircleContext {
   jam3iyyaId: string;
@@ -30,6 +52,12 @@ export interface CircleContext {
  * - Prevents hallucinations of financial data
  */
 export async function generateChatStream(messages: any[], circleContext: CircleContext): Promise<ReadableStream> {
+  if (!geminiApiKey) {
+    return createTextStream(buildDemoResponse(circleContext));
+  }
+
+  const genAI = new GoogleGenerativeAI(geminiApiKey);
+
   // Build the system prompt with hardened instructions
   const systemPrompt = `${baseChatSystemInstruction}
 

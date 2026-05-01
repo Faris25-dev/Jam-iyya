@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -32,7 +32,7 @@ interface NotificationBellProps {
  * - RTL support for Arabic
  */
 export function NotificationBell({ locale = 'en' }: NotificationBellProps) {
-  const supabase = createSupabaseBrowserClient();
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const isRtl = locale === 'ar';
 
   // State
@@ -44,16 +44,16 @@ export function NotificationBell({ locale = 'en' }: NotificationBellProps) {
   const subscriptionRef = useRef<any>(null);
 
   // Localization
-  const labels = {
+  const labels = useMemo(() => ({
     noNotifications: locale === 'ar' ? 'لا توجد إشعارات' : 'No notifications',
     markAsRead: locale === 'ar' ? 'وضع علامة كمقروء' : 'Mark as read',
     delete: locale === 'ar' ? 'حذف' : 'Delete',
     newNotification: locale === 'ar' ? 'إشعار جديد' : 'New notification',
     notifications: locale === 'ar' ? 'الإشعارات' : 'Notifications',
-  };
+  }), [locale]);
 
   // ========== FETCH UNREAD COUNT (OPTIMIZED) ==========
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = useCallback(async () => {
     try {
       const response = await fetch('/api/notifications?count_only=true', {
         headers: { 'Cache-Control': 'no-cache' },
@@ -66,10 +66,10 @@ export function NotificationBell({ locale = 'en' }: NotificationBellProps) {
     } catch (error) {
       console.error('Failed to fetch unread count:', error);
     }
-  };
+  }, []);
 
   // ========== FETCH NOTIFICATIONS ==========
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await fetch('/api/notifications?limit=10', {
@@ -86,7 +86,7 @@ export function NotificationBell({ locale = 'en' }: NotificationBellProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // ========== MARK AS READ ==========
   const markAsRead = async (notificationId: string) => {
@@ -196,15 +196,14 @@ export function NotificationBell({ locale = 'en' }: NotificationBellProps) {
         },
         (payload: any) => {
           const deletedId = payload.old.id;
-          const wasUnread = notifications.find(n => n.id === deletedId)?.is_read === false;
 
-          // Remove from list
-          setNotifications(prev => prev.filter(n => n.id !== deletedId));
-
-          // Update unread count
-          if (wasUnread) {
-            setUnreadCount(prev => Math.max(0, prev - 1));
-          }
+          setNotifications(prev => {
+            const wasUnread = prev.find(n => n.id === deletedId)?.is_read === false;
+            if (wasUnread) {
+              setUnreadCount(count => Math.max(0, count - 1));
+            }
+            return prev.filter(n => n.id !== deletedId);
+          });
         }
       )
       .subscribe();
@@ -216,7 +215,7 @@ export function NotificationBell({ locale = 'en' }: NotificationBellProps) {
         supabase.removeChannel(subscriptionRef.current);
       }
     };
-  }, []);
+  }, [fetchNotifications, labels.newNotification, supabase]);
 
   // ========== CLOSE DROPDOWN ON OUTSIDE CLICK ==========
   useEffect(() => {

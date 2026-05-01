@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { getTier } from '@/lib/ai/trust-engine';
 
+export const dynamic = 'force-dynamic';
+
 function getNextTierMilestone(score: number) {
   if (score < 400) return 400;
   if (score < 600) return 600;

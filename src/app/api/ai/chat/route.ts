@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { generateChatStream, CircleContext } from '@/lib/ai/chat-assistant';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Get localized error messages for friendly UI display
  */

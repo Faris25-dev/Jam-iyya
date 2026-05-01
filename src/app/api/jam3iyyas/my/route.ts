@@ -3,16 +3,18 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { getMyJam3iyyas } from '@/lib/services/jam3iyya-service';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const supabase = await createServerClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const { data, error } = await getMyJam3iyyas(session.user.id);
+    const { data, error } = await getMyJam3iyyas(user.id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

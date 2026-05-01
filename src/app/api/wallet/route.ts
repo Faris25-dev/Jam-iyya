@@ -3,6 +3,8 @@ import { createServerClient } from '@/lib/supabase/server';
 import { getLockedFunds } from '@/lib/services/financial-rules-service';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 const walletOperationSchema = z.object({
   type: z.enum(['deposit', 'withdraw']),
   amount: z.number().positive().max(10000).multipleOf(0.01) // Max 2 decimal places

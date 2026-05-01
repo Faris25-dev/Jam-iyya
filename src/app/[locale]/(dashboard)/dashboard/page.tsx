@@ -311,10 +311,12 @@ function DashboardTopBar({
   locale,
   labels,
   onSwitchLocale,
+  onOpenSettings,
 }: Readonly<{
   locale: Locale;
   labels: DashboardStrings;
   onSwitchLocale: () => void;
+  onOpenSettings: () => void;
 }>) {
   return (
     <div
@@ -331,22 +333,46 @@ function DashboardTopBar({
       }}
     >
       <span style={{ fontWeight: 800, fontSize: 17, color: DS.colors.navy }}>{labels.dashboardTitle}</span>
-      <button
-        onClick={onSwitchLocale}
-        style={{
-          background: DS.colors.mutedLight,
-          border: 'none',
-          borderRadius: 8,
-          padding: '5px 11px',
-          cursor: 'pointer',
-          fontSize: 12,
-          fontWeight: 700,
-          color: DS.colors.navy,
-          fontFamily: 'inherit',
-        }}
-      >
-        {locale === 'ar' ? labels.englishShort : labels.arabicShort}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          onClick={onOpenSettings}
+          aria-label="Settings"
+          title="Settings"
+          style={{
+            width: 34,
+            height: 34,
+            background: DS.colors.mutedLight,
+            border: 'none',
+            borderRadius: 10,
+            cursor: 'pointer',
+            color: DS.colors.navy,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06a2 2 0 01-2.83 2.83l-.06-.06A1.7 1.7 0 0015 19.4a1.7 1.7 0 00-1 .6 1.7 1.7 0 00-.4 1.1V21a2 2 0 01-4 0v-.09A1.7 1.7 0 008.6 19.4a1.7 1.7 0 00-1.88.34l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.7 1.7 0 004.6 15a1.7 1.7 0 00-.6-1 1.7 1.7 0 00-1.1-.4H3a2 2 0 010-4h.09A1.7 1.7 0 004.6 8.6a1.7 1.7 0 00-.34-1.88l-.06-.06a2 2 0 012.83-2.83l.06.06A1.7 1.7 0 009 4.6a1.7 1.7 0 001-.6 1.7 1.7 0 00.4-1.1V3a2 2 0 014 0v.09A1.7 1.7 0 0015.4 4.6a1.7 1.7 0 001.88-.34l.06-.06a2 2 0 012.83 2.83l-.06.06A1.7 1.7 0 0019.4 9c.2.38.52.7.9.9.34.18.72.3 1.1.3H21a2 2 0 010 4h-.09a1.7 1.7 0 00-1.51.8z" />
+          </svg>
+        </button>
+        <button
+          onClick={onSwitchLocale}
+          style={{
+            background: DS.colors.mutedLight,
+            border: 'none',
+            borderRadius: 8,
+            padding: '5px 11px',
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 700,
+            color: DS.colors.navy,
+            fontFamily: 'inherit',
+          }}
+        >
+          {locale === 'ar' ? labels.englishShort : labels.arabicShort}
+        </button>
+      </div>
     </div>
   );
 }
@@ -634,7 +660,12 @@ export default function DashboardPage({ params }: Readonly<{ params: { locale: s
   return (
     <div style={{ minHeight: '100vh', background: DS.colors.bg, paddingBottom: 90 }} data-screen-label="Dashboard">
       <style>{`@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }`}</style>
-      <DashboardTopBar locale={locale} labels={labels} onSwitchLocale={() => router.push(`/${isRtl ? 'en' : 'ar'}/dashboard`)} />
+      <DashboardTopBar
+        locale={locale}
+        labels={labels}
+        onSwitchLocale={() => router.push(`/${isRtl ? 'en' : 'ar'}/dashboard`)}
+        onOpenSettings={() => router.push(`/${locale}/settings`)}
+      />
 
       <div style={{ padding: '20px 16px', maxWidth: 520, margin: '0 auto' }}>
         <Card style={{ padding: 20, marginBottom: 16, overflow: 'hidden', position: 'relative', background: DS.colors.navy }}>

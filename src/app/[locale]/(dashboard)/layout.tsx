@@ -79,7 +79,7 @@ function DashboardNavBar({ locale, pathname }: Readonly<{ locale: Locale; pathna
         </svg>
       ),
     },
-  ];
+  ].filter((item) => item.href !== `/${locale}/settings`);
 
   return (
     <nav

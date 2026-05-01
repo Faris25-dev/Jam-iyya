@@ -5,6 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 import { processMonthlyPaymentCycle } from '@/lib/services/payment-service';
 import type { Database } from '@/types/database';
 
+export const dynamic = 'force-dynamic';
+
 type Jam3iyyaRow = Database['public']['Tables']['jam3iyyas']['Row'];
 type Jam3iyyaWithCurrentMonth = Jam3iyyaRow & { current_month: number };
 

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 const querySchema = z.object({
   type: z.enum(['contribution', 'payout', 'insurance_contribution', 'insurance_payout', 'deposit', 'withdrawal']).optional(),
   jam3iyya_id: z.string().uuid().optional(),

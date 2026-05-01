@@ -3,6 +3,8 @@ import { createServerClient } from '@/lib/supabase/server';
 import { listJam3iyyas, createJam3iyya } from '@/lib/services/jam3iyya-service';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 // ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
@@ -50,10 +52,10 @@ const postBodySchema = z
 export async function GET(request: NextRequest) {
   const supabase = await createServerClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
@@ -77,7 +79,7 @@ export async function GET(request: NextRequest) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('trust_score')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single();
 
     if (profile) {
@@ -91,7 +93,7 @@ export async function GET(request: NextRequest) {
       ...filters,
       user_min_trust_score,
     },
-    session.user.id
+    user.id
   );
 
   if (error) {
@@ -122,10 +124,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const supabase = await createServerClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
@@ -142,7 +144,7 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await createJam3iyya({
       ...parsed.data,
-      creator_id: session.user.id,
+      creator_id: user.id,
     });
 
     if (error) {

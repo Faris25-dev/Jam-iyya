@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import { processManualPayment } from '@/lib/services/payment-service';
 
+export const dynamic = 'force-dynamic';
+
 const manualPaymentSchema = z.object({
   jam3iyyaId: z.string().uuid(),
   monthNumber: z.number().int().min(1),

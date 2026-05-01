@@ -3,6 +3,8 @@ import { createServerClient } from '@/lib/supabase/server';
 import { leaveJam3iyya } from '@/lib/services/jam3iyya-service';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 const uuidSchema = z.string().uuid();
 
 export async function POST(
@@ -10,9 +12,9 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const supabase = await createServerClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json(
       { error: { message: { en: 'Not authenticated', ar: 'غير مسجل الدخول' } } }, 
       { status: 401 }
@@ -26,7 +28,7 @@ export async function POST(
     );
   }
 
-  const { data, error } = await leaveJam3iyya(params.id, session.user.id);
+  const { data, error } = await leaveJam3iyya(params.id, user.id);
 
   if (error) {
     let status = 400;

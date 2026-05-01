@@ -19,6 +19,33 @@ const TIER_STYLES: Record<Tier, { color: string; bg: string }> = {
   platinum: { color: '#8B7CB6', bg: '#F0EDF8' },
 };
 
+function mapApiJam(jam: any): BrowseJam {
+  return {
+    id: jam.id,
+    uuid: jam.id,
+    nameAr: jam.name,
+    nameEn: jam.name,
+    amount: jam.monthly_amount,
+    totalMembers: jam.total_members,
+    duration: jam.duration_months,
+    minScore: jam.min_trust_score || 100,
+    type: jam.type,
+    theme: 'default',
+    currentMonth: jam.current_month || 0,
+    yourTurn: 0,
+    status: jam.status,
+    avgScore: jam.matchPercentage ?? jam.min_trust_score ?? 0,
+    organizerAr: 'Creator',
+    organizerEn: 'Creator',
+    descriptionAr: jam.description || '',
+    descriptionEn: jam.description || '',
+    insuranceFund: (jam.monthly_amount * jam.total_members) * 0.1,
+    totalPot: jam.monthly_amount * jam.total_members,
+    members: [],
+    slots: Math.max(0, jam.total_members - (jam.current_members_count || 0)),
+  };
+}
+
 type MarketplaceStrings = {
   marketplaceTitle: string;
   englishShort: string;
@@ -234,6 +261,7 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
 
   // State for API data
   const [jams, setJams] = useState<BrowseJam[]>([]);
+  const [smartMatchJam, setSmartMatchJam] = useState<BrowseJam | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -258,36 +286,21 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
         
         const data = await response.json();
         
-        // Transform API response to match Jam interface
-        const transformed: BrowseJam[] = (data.jam3iyyas || []).map((jam: any) => ({
-          id: jam.id,
-          uuid: jam.id,
-          nameAr: jam.name,
-          nameEn: jam.name,
-          amount: jam.monthly_amount,
-          totalMembers: jam.total_members,
-          duration: jam.duration_months,
-          minScore: jam.min_trust_score || 100,
-          type: jam.type,
-          theme: 'default',
-          currentMonth: 0,
-          yourTurn: 0,
-          status: jam.status,
-          avgScore: jam.min_trust_score || 0,
-          organizerAr: 'Creator',
-          organizerEn: 'Creator',
-          descriptionAr: jam.description || '',
-          descriptionEn: jam.description || '',
-          insuranceFund: (jam.monthly_amount * jam.total_members) * 0.1,
-          totalPot: jam.monthly_amount * jam.total_members,
-          members: [],
-          slots: Math.max(0, jam.total_members - (jam.current_members_count || 0)),
-        }));
+        const transformed: BrowseJam[] = (data.jam3iyyas || []).map(mapApiJam);
         
         setJams(transformed);
+
+        const smartResponse = await fetch('/api/jam3iyyas/smart-match');
+        if (smartResponse.ok) {
+          const smartData = await smartResponse.json();
+          setSmartMatchJam(smartData.matches?.[0] ? mapApiJam(smartData.matches[0]) : transformed[0] || null);
+        } else {
+          setSmartMatchJam(transformed[0] || null);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
         setJams([]);
+        setSmartMatchJam(null);
       } finally {
         setLoading(false);
       }
@@ -368,7 +381,7 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
     return matchSearch && matchTier && matchAmt;
   });
 
-  const smartMatch = jams[0] || null;
+  const smartMatch = smartMatchJam || jams[0] || null;
 
   const handleJoin = async (jam: BrowseJam) => {
     try {
@@ -400,7 +413,7 @@ export default function BrowseJam3iyyasPage({ params }: Readonly<{ params: { loc
 
       setTimeout(() => {
         setJoinToastMessage(null);
-        router.push('/ar/dashboard');
+        router.push(`/${locale}/dashboard`);
       }, 1500);
     } catch (joinError) {
       setJoinModal(null);

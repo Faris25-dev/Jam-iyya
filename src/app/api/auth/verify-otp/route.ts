@@ -4,6 +4,8 @@ import { calculateInitialScore, getTier, InitialTrustFactors } from '@/lib/ai/tr
 
 const OTP_BYPASS = process.env.NODE_ENV !== 'production'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()

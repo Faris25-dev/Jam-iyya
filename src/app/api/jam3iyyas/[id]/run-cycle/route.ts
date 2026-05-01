@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import { processMonthlyPaymentCycle } from '@/lib/services/payment-service';
 
+export const dynamic = 'force-dynamic';
+
 const uuidSchema = z.string().uuid();
 
 export async function POST(
@@ -12,10 +14,10 @@ export async function POST(
 ) {
   const supabase = await createServerClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
@@ -33,7 +35,7 @@ export async function POST(
     return NextResponse.json({ error: 'Circle not found' }, { status: 404 });
   }
 
-  if (circle.creator_id !== session.user.id) {
+  if (circle.creator_id !== user.id) {
     return NextResponse.json({ error: 'Only the circle creator can trigger a cycle' }, { status: 403 });
   }
 

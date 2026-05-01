@@ -8,7 +8,10 @@ export const genAI = new GoogleGenerativeAI(apiKey);
 
 export async function generateTrustScoreExplanation(prompt: string) {
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured.');
+    return [
+      'Demo trust insight: your score is calculated from verified identity, payment history, wallet activity, circle participation, and profile completeness.',
+      'Add GEMINI_API_KEY to enable the live AI-generated explanation.',
+    ].join(' ');
   }
 
   const model = genAI.getGenerativeModel({

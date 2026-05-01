@@ -40,9 +40,22 @@ Jam'iyya AI is a Next.js 14 prototype for digital savings circles with AI trust 
 
 Required variables are documented in `.env.local.example`.
 
+- `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL.
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` - public browser/server auth key.
+- `SUPABASE_SERVICE_ROLE_KEY` - server-only key for demo avatar upload, member search, invites, and payment-cycle simulation.
+- `GEMINI_API_KEY` - optional for the hackathon demo. If omitted, AI chat/trust explanations use safe mock responses.
+- `CRON_SECRET` - protects payment-cycle processing outside local test mode.
+
 ## Supabase
 
-Run the migration in `supabase/migrations/20260428000000_initial_schema.sql` to create the initial tables, RLS policies, and triggers.
+Run the migrations in `supabase/migrations` in timestamp order to create the tables, RLS policies, triggers, wallet/payment RPCs, chat history, and trust-score fields.
+
+Manual Supabase setup for the demo:
+
+- Create a public Storage bucket named `avatars`.
+- Keep `SUPABASE_SERVICE_ROLE_KEY` only in `.env.local` or server deployment secrets.
+- Do not put service-role keys in any `NEXT_PUBLIC_` variable.
+- For local demos, OTP/SMS and Gemini can be absent; the app uses development-safe mock behavior where configured.
 
 ## Team Onboarding
 

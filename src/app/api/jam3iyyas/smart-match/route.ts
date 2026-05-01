@@ -3,6 +3,8 @@ import { createServerClient } from '@/lib/supabase/server';
 import { rankJam3iyyas, type UserContext, type CircleCandidate } from '@/lib/ai/smart-match';
 import { getTier } from '@/lib/ai/trust-engine';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const supabase = await createServerClient();
